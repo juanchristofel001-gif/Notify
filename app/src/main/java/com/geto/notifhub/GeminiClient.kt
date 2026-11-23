@@ -92,6 +92,21 @@ object GeminiClient {
         return generate(apiKey, model, system, "Topik: $topic\nJudul berita:\n$lines", json = false).trim()
     }
 
+    /** 3 poin singkat inti berita (dari judul saja) untuk ringkasan harian. */
+    fun newsBullets(apiKey: String, model: String, items: List<News.Item>): List<String> {
+        val lines = items.joinToString("\n") { "- ${it.title} (${it.source})" }
+        val system = """
+            Dari daftar judul berita ekonomi Indonesia, tulis tepat 3 poin inti hari ini dalam bahasa Indonesia.
+            Tiap poin maksimal 14 kata, gabungkan judul yang membahas hal sama, jangan mengarang angka yang tidak ada di judul.
+            Balas JSON: {"points":["...","...","..."]}
+        """.trimIndent()
+        val text = generate(apiKey, model, system, lines, json = true)
+        val start = text.indexOf('{'); val end = text.lastIndexOf('}')
+        if (start < 0 || end <= start) return emptyList()
+        val arr = JSONObject(text.substring(start, end + 1)).optJSONArray("points") ?: return emptyList()
+        return (0 until arr.length()).map { arr.optString(it).trim() }.filter { it.isNotEmpty() }.take(3)
+    }
+
     /** Dipakai tombol "Tes koneksi". */
     fun test(apiKey: String, model: String): String =
         generate(apiKey, model, "Jawab sangat singkat.", "Balas dengan kata: OK", json = false)

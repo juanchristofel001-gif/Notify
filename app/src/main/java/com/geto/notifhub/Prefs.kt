@@ -57,6 +57,18 @@ class Prefs(ctx: Context) {
         get() = sp.getString("pinned_apps", "").orEmpty().split(',').filter { it.isNotBlank() }
         set(v) = sp.edit().putString("pinned_apps", v.joinToString(",")).apply()
 
+    var digestEnabled: Boolean
+        get() = sp.getBoolean("digest_on", true)
+        set(v) = sp.edit().putBoolean("digest_on", v).apply()
+
+    var digestHour: Int
+        get() = sp.getInt("digest_h", 7)
+        set(v) = sp.edit().putInt("digest_h", v).apply()
+
+    var digestMinute: Int
+        get() = sp.getInt("digest_m", 0)
+        set(v) = sp.edit().putInt("digest_m", v).apply()
+
     var alertUrgent: Boolean
         get() = sp.getBoolean("alert_urgent", true)
         set(v) = sp.edit().putBoolean("alert_urgent", v).apply()

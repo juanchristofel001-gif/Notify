@@ -49,11 +49,73 @@ class SettingsActivity : AppCompatActivity() {
             } ?: "🎂 Atur tanggal lahir"
         }
         showBday()
+
+        val swDigest = findViewById<SwitchCompat>(R.id.sw_digest)
+        val timeBtn = findViewById<Button>(R.id.btn_digest_time)
+        fun showTime() {
+            timeBtn.text = String.format(java.util.Locale.US, "Jam %02d.%02d", prefs.digestHour, prefs.digestMinute)
+        }
+        showTime()
+        swDigest.isChecked = prefs.digestEnabled
+        swDigest.setOnCheckedChangeListener { _, on ->
+            prefs.digestEnabled = on
+            Digest.schedule(this)
+        }
+        timeBtn.setOnClickListener {
+            android.app.TimePickerDialog(this, { _, h, m ->
+                prefs.digestHour = h
+                prefs.digestMinute = m
+                showTime()
+                Digest.schedule(this)
+                Toast.makeText(this, "Ringkasan dikirim tiap hari jam ${timeBtn.text.removePrefix("Jam ")}", Toast.LENGTH_SHORT).show()
+            }, prefs.digestHour, prefs.digestMinute, true).show()
+        }
+        findViewById<Button>(R.id.btn_digest_now).setOnClickListener {
+            save()
+            Toast.makeText(this, "Menyiapkan ringkasan…", Toast.LENGTH_SHORT).show()
+            Thread {
+                val err = try { Digest.sendNow(this); null } catch (e: Exception) { e.message }
+                runOnUiThread {
+                    if (err != null) Toast.makeText(this, "Gagal: $err", Toast.LENGTH_LONG).show()
+                }
+            }.start()
+        }
         bdayBtn.setOnClickListener {
             val (y, m, d) = prefs.birthday ?: Triple(2005, 1, 1)
             android.app.DatePickerDialog(this, { _, yy, mm, dd ->
                 prefs.birthdayRaw = String.format(java.util.Locale.US, "%04d-%02d-%02d", yy, mm + 1, dd)
                 showBday()
+
+        val swDigest = findViewById<SwitchCompat>(R.id.sw_digest)
+        val timeBtn = findViewById<Button>(R.id.btn_digest_time)
+        fun showTime() {
+            timeBtn.text = String.format(java.util.Locale.US, "Jam %02d.%02d", prefs.digestHour, prefs.digestMinute)
+        }
+        showTime()
+        swDigest.isChecked = prefs.digestEnabled
+        swDigest.setOnCheckedChangeListener { _, on ->
+            prefs.digestEnabled = on
+            Digest.schedule(this)
+        }
+        timeBtn.setOnClickListener {
+            android.app.TimePickerDialog(this, { _, h, m ->
+                prefs.digestHour = h
+                prefs.digestMinute = m
+                showTime()
+                Digest.schedule(this)
+                Toast.makeText(this, "Ringkasan dikirim tiap hari jam ${timeBtn.text.removePrefix("Jam ")}", Toast.LENGTH_SHORT).show()
+            }, prefs.digestHour, prefs.digestMinute, true).show()
+        }
+        findViewById<Button>(R.id.btn_digest_now).setOnClickListener {
+            save()
+            Toast.makeText(this, "Menyiapkan ringkasan…", Toast.LENGTH_SHORT).show()
+            Thread {
+                val err = try { Digest.sendNow(this); null } catch (e: Exception) { e.message }
+                runOnUiThread {
+                    if (err != null) Toast.makeText(this, "Gagal: $err", Toast.LENGTH_LONG).show()
+                }
+            }.start()
+        }
             }, y, m - 1, d).show()
         }
 

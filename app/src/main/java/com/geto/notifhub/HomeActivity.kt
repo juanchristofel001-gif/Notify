@@ -96,6 +96,7 @@ class HomeActivity : AppCompatActivity() {
         }
 
         playIntro()
+        Digest.schedule(this)
     }
 
     override fun onResume() {
