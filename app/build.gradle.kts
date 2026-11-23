@@ -15,6 +15,17 @@ android {
         versionName = "1.0"
     }
 
+    // Kunci tetap supaya APK versi baru bisa menimpa versi lama di HP.
+    // Hanya untuk pemakaian pribadi; jangan dipakai untuk rilis publik.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("notifhub-debug.jks")
+            storePassword = "notifhub"
+            keyAlias = "notifhub"
+            keyPassword = "notifhub"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
