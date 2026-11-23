@@ -28,11 +28,6 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("all_apps", true)
         set(v) = sp.edit().putBoolean("all_apps", v).apply()
 
-    /** false = maskot 3D original (Nofi), true = gambar maskot (Zhuxin). */
-    var useImageMascot: Boolean
-        get() = sp.getBoolean("image_mascot", false)
-        set(v) = sp.edit().putBoolean("image_mascot", v).apply()
-
     var alertUrgent: Boolean
         get() = sp.getBoolean("alert_urgent", true)
         set(v) = sp.edit().putBoolean("alert_urgent", v).apply()

@@ -86,14 +86,6 @@
                 android:textSize="13sp" />
         </LinearLayout>
 
-        <com.geto.notifhub.MascotView
-            android:id="@+id/mascot3d"
-            android:layout_width="132dp"
-            android:layout_height="160dp"
-            android:layout_gravity="bottom|end"
-            android:layout_marginBottom="-10dp"
-            android:contentDescription="Nofi, maskot NotifHub" />
-
         <View
             android:id="@+id/mascot_shadow"
             android:layout_width="72dp"
