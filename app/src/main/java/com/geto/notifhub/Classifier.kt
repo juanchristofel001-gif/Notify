@@ -85,7 +85,7 @@ object Classifier {
         sb.append(
             """
             Kamu memilah notifikasi HP milik satu orang berdasarkan seberapa cepat ia perlu memperhatikannya.
-            Setiap notifikasi punya "kategori" (Komunikasi, Sosmed, Game, Lainnya), "chat_grup" (true jika dari grup), dan "pesan_langsung" (true jika berupa pesan/DM dari seseorang).
+            Setiap notifikasi punya "kategori" (Komunikasi, Keuangan, Belanja, Transport & Makan, Sosmed, Game, Sistem, Lainnya), "chat_grup" (true jika dari grup), dan "pesan_langsung" (true jika berupa pesan/DM dari seseorang).
 
             Level:
             - URGENT: perlu ditindak dalam hitungan menit sampai beberapa jam (OTP/kode verifikasi, peringatan keamanan akun, transaksi mencurigakan, keadaan darurat, tenggat hari ini, atasan/dosen/HRD/keluarga menanyakan hal mendesak).
@@ -98,7 +98,11 @@ object Classifier {
             - Komunikasi, chat grup (chat_grup=true): default RENDAH (obrolan ramai) atau NORMAL (info yang relevan). Naikkan ke PENTING/URGENT HANYA jika menyebut/me-mention pengguna, berisi tenggat hari ini, pengumuman resmi penting (kelas batal, rapat dipindah), keadaan darurat, atau dikirim kontak VIP.
             - Sosmed: DM/pesan langsung (pesan_langsung=true atau isinya pesan dari seseorang) → PENTING (URGENT jika mendesak); komentar/mention langsung ke pengguna → NORMAL; like, follow, saran teman, live, rekomendasi video, "kenangan" → RENDAH.
             - Game: default RENDAH (energi penuh, event, hadiah harian, ajakan main). Hanya keamanan akun atau transaksi/top-up → PENTING atau URGENT.
-            - Lainnya: transaksi bank/e-wallet dan OTP → URGENT; status paket/ojol/janji temu → NORMAL atau PENTING; promo/diskon → RENDAH.
+            - Keuangan: OTP, transaksi mencurigakan, login/perangkat baru → URGENT; tagihan jatuh tempo hari ini/besok → URGENT, lebih lama → PENTING; pembayaran berhasil, transfer masuk/keluar, top up → NORMAL (PENTING jika nominal besar atau tidak terduga); promo/cashback → RENDAH.
+            - Belanja: pesanan perlu dibayar sebelum batas waktu, dibatalkan, atau gagal → PENTING; paket dikirim/sampai → NORMAL; promo, flash sale, rekomendasi → RENDAH.
+            - Transport & Makan: driver sudah tiba/menunggu, pesanan makanan sampai → URGENT; driver dalam perjalanan → PENTING; promo → RENDAH.
+            - Sistem: default RENDAH (screenshot, unduhan, pembaruan); baterai kritis atau peringatan keamanan → PENTING.
+            - Lainnya: janji temu/jadwal → PENTING; info biasa → NORMAL; promo → RENDAH.
 
             Kalau ragu antara dua level, pilih yang lebih rendah, kecuali menyangkut keamanan akun atau uang.
             """.trimIndent()
@@ -186,6 +190,13 @@ object Rules {
             item.category == Categories.KOMUNIKASI && item.isMessage -> Priority.PENTING to "Chat pribadi"
             item.category == Categories.SOSMED && item.isMessage -> Priority.PENTING to "DM sosmed"
             item.category == Categories.SOSMED -> Priority.RENDAH to "Aktivitas sosmed"
+            item.category == Categories.SISTEM -> Priority.RENDAH to "Notifikasi sistem"
+            item.category == Categories.KEUANGAN && item.thread == "Tagihan" -> Priority.PENTING to "Tagihan"
+            item.category == Categories.KEUANGAN && item.thread == "Promo" -> Priority.RENDAH to "Promo keuangan"
+            item.category == Categories.KEUANGAN -> Priority.NORMAL to "Transaksi"
+            item.category == Categories.BELANJA && item.thread == "Pesanan & Pengiriman" -> Priority.NORMAL to "Status pesanan"
+            item.category == Categories.BELANJA -> Priority.RENDAH to "Info belanja"
+            item.category == Categories.TRANSPORT && item.thread == "Perjalanan & Pesanan" -> Priority.PENTING to "Perjalanan/pesanan aktif"
             else -> Priority.NORMAL to "Tidak ada tanda khusus"
         }
     }

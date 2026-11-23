@@ -61,7 +61,10 @@ class NotifListener : NotificationListenerService() {
         if (n.category in SKIP_CATEGORIES) return
 
         val app = appLabel(pkg)
-        val category = Categories.of(this, pkg, n)
+        val rawTitle = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        val rawText = (n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
+            ?: n.extras.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
+        val category = Categories.of(this, pkg, n, rawTitle, rawText)
         val db = Db.get(this)
         val newIds = ArrayList<Long>()
         val extras = n.extras
@@ -101,8 +104,9 @@ class NotifListener : NotificationListenerService() {
             newIds.add(
                 db.insert(
                     pkg, app, title.ifEmpty { app }, text, sbn.postTime, hash, category, false, isMessage,
-                    // Chat/email dikelompokkan per pengirim; notifikasi lain per aplikasi
-                    if (category == Categories.KOMUNIKASI || isMessage) Db.cleanThread(title) else "",
+                    // Chat/email dikelompokkan per pengirim; notifikasi lain per jenis (Pembayaran, Promo, ...)
+                    if (category == Categories.KOMUNIKASI || isMessage) Db.cleanThread(title)
+                    else Categories.kind(category, title, text),
                 )
             )
         }

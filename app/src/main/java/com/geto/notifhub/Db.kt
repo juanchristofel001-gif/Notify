@@ -55,7 +55,9 @@ data class Achievement(
     val claimedToday: Boolean,
 )
 
-class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db", null, 5) {
+class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db", null, 6) {
+
+    private val appCtx: Context = ctx.applicationContext
 
     companion object {
         @Volatile
@@ -170,6 +172,26 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
                     if (clean != old) db.execSQL("UPDATE notifs SET thread = ? WHERE thread = ?", arrayOf<Any>(clean, old))
                 }
             }
+        }
+        if (oldVersion < 6) recategorize(db)   // harus terakhir: butuh kolom thread
+    }
+
+    /** Hitung ulang kategori & sub-kelompok notifikasi non-chat lama dengan aturan terbaru. */
+    private fun recategorize(db: SQLiteDatabase) {
+        val rows = ArrayList<Triple<Long, String, String>>()   // id, kategori, thread
+        db.rawQuery(
+            "SELECT id, pkg, title, body FROM notifs WHERE is_message = 0 AND category != 'komunikasi'",
+            emptyArray<String>()
+        ).use { c ->
+            while (c.moveToNext()) {
+                val pkg = c.getString(1); val title = c.getString(2); val body = c.getString(3)
+                val cat = Categories.of(appCtx, pkg, null, title, body)
+                val thread = if (cat == Categories.KOMUNIKASI) cleanThread(title) else Categories.kind(cat, title, body)
+                rows.add(Triple(c.getLong(0), cat, thread))
+            }
+        }
+        for ((id, cat, thread) in rows) {
+            db.execSQL("UPDATE notifs SET category = ?, thread = ? WHERE id = ?", arrayOf<Any>(cat, thread, id))
         }
     }
 

@@ -26,6 +26,7 @@ object GeminiClient {
                     .put("kategori", Categories.label(it.category))
                     .put("chat_grup", it.isGroup)
                     .put("pesan_langsung", it.isMessage)
+                    .put("jenis", it.thread.takeIf { t -> !it.isMessage && t.isNotEmpty() } ?: "")
                     .put("judul", it.title.take(200))
                     .put("isi", it.body.take(600))
                     .put("waktu", fmt.format(Date(it.ts)))
