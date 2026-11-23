@@ -35,6 +35,7 @@ data class NotifItem(
     val category: String,
     val isGroup: Boolean,
     val isMessage: Boolean,
+    val thread: String = "",
 )
 
 data class Habit(
@@ -45,7 +46,7 @@ data class Habit(
     val streak: Int,
 )
 
-class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db", null, 3) {
+class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db", null, 4) {
 
     companion object {
         @Volatile
@@ -57,8 +58,13 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
             }
 
         private const val COLS =
-            "id, pkg, app, title, body, ts, priority, reason, source, is_read, category, is_group, is_message"
+            "id, pkg, app, title, body, ts, priority, reason, source, is_read, category, is_group, is_message, thread"
         private const val KEEP_DAYS = 30L
+
+        private val COUNT_SUFFIX = Regex("""\s*\(\d+\s*(messages?|pesan|new messages?|pesan baru)\)\s*$""", RegexOption.IGNORE_CASE)
+
+        /** "Kondangan Rhiza (2 messages)" → "Kondangan Rhiza" */
+        fun cleanThread(t: String): String = t.replace(COUNT_SUFFIX, "").trim()
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -77,7 +83,8 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
                 hash TEXT NOT NULL,
                 category TEXT NOT NULL DEFAULT 'lainnya',
                 is_group INTEGER NOT NULL DEFAULT 0,
-                is_message INTEGER NOT NULL DEFAULT 0
+                is_message INTEGER NOT NULL DEFAULT 0,
+                thread TEXT NOT NULL DEFAULT ''
             )"""
         )
         db.execSQL("CREATE INDEX idx_hash ON notifs(hash)")
@@ -120,6 +127,20 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
             db.execSQL("UPDATE notifs SET is_message = 1 WHERE hash LIKE 'm|%'")
         }
         if (oldVersion < 3) createHabitTables(db)
+        if (oldVersion < 4) {
+            db.execSQL("ALTER TABLE notifs ADD COLUMN thread TEXT NOT NULL DEFAULT ''")
+            // Isi thread data lama: "Grup — Pengirim" → "Grup"; chat/email lain → judulnya (pengirim)
+            db.execSQL("UPDATE notifs SET thread = substr(title, 1, instr(title, ' — ') - 1) WHERE instr(title, ' — ') > 0")
+            db.execSQL("UPDATE notifs SET thread = title WHERE thread = '' AND category = 'komunikasi'")
+            // Buang akhiran hitungan WhatsApp seperti " (2 messages)"
+            db.rawQuery("SELECT DISTINCT thread FROM notifs WHERE thread LIKE '%)'", emptyArray<String>()).use { c ->
+                while (c.moveToNext()) {
+                    val old = c.getString(0)
+                    val clean = cleanThread(old)
+                    if (clean != old) db.execSQL("UPDATE notifs SET thread = ? WHERE thread = ?", arrayOf<Any>(clean, old))
+                }
+            }
+        }
     }
 
     private fun Cursor.toItem() = NotifItem(
@@ -136,6 +157,7 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
         category = getString(10),
         isGroup = getInt(11) != 0,
         isMessage = getInt(12) != 0,
+        thread = getString(13),
     )
 
     private fun list(sql: String, args: Array<String>): List<NotifItem> =
@@ -154,7 +176,7 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
 
     fun insert(
         pkg: String, app: String, title: String, body: String, ts: Long, hash: String,
-        category: String, isGroup: Boolean, isMessage: Boolean,
+        category: String, isGroup: Boolean, isMessage: Boolean, thread: String,
     ): Long {
         val v = ContentValues().apply {
             put("pkg", pkg)
@@ -167,6 +189,7 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
             put("category", category)
             put("is_group", if (isGroup) 1 else 0)
             put("is_message", if (isMessage) 1 else 0)
+            put("thread", thread)
         }
         val id = writableDatabase.insert("notifs", null, v)
         if (id % 50L == 0L) purgeOld()
@@ -207,6 +230,17 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
             while (c.moveToNext()) m[c.getString(0)] = c.getInt(1)
             m
         }
+
+    /** Semua notifikasi dalam satu percakapan (terlama → terbaru). */
+    fun threadItems(pkg: String, thread: String): List<NotifItem> =
+        list(
+            "SELECT $COLS FROM notifs WHERE pkg = ? AND thread = ? ORDER BY ts ASC LIMIT 300",
+            arrayOf(pkg, thread)
+        )
+
+    fun markThreadRead(pkg: String, thread: String) {
+        writableDatabase.execSQL("UPDATE notifs SET is_read = 1 WHERE pkg = ? AND thread = ?", arrayOf<Any>(pkg, thread))
+    }
 
     fun pending(limit: Int): List<NotifItem> =
         list(

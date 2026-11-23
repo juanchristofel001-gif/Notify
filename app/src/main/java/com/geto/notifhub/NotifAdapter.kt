@@ -45,6 +45,11 @@ class NotifAdapter(
         )
     }
 
+    object Colors {
+        fun forApp(pkg: String): Int =
+            FIXED_COLORS[pkg] ?: AVATAR_COLORS[Math.floorMod(pkg.hashCode(), AVATAR_COLORS.size)]
+    }
+
     private val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
     private val dateFmt = SimpleDateFormat("dd MMM", Locale.getDefault())
 

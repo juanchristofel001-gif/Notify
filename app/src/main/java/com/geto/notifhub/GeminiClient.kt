@@ -55,6 +55,25 @@ object GeminiClient {
         return out
     }
 
+    /** Ringkasan satu percakapan + hal yang perlu ditindak. */
+    fun summarize(apiKey: String, model: String, convName: String, items: List<NotifItem>): String {
+        val fmt = SimpleDateFormat("dd MMM HH:mm", Locale("id", "ID"))
+        val lines = items.takeLast(120).joinToString("\n") {
+            val who = it.title.substringAfter(" — ", it.title)
+            "[${fmt.format(Date(it.ts))}] $who: ${it.body.take(400)}"
+        }
+        val system = """
+            Kamu membantu pengguna memahami percakapan/notifikasi yang menumpuk di HP-nya.
+            Tulis dalam bahasa Indonesia santai dan ringkas, tanpa basa-basi pembuka.
+            Format:
+            Ringkasan:
+            • (maksimal 4 poin, tiap poin 1 kalimat)
+            Perlu kamu lakukan:
+            • (hal yang menuntut tindakan/jawaban pengguna, sebut tenggat jika ada; tulis "Tidak ada" jika tidak ada)
+        """.trimIndent()
+        return generate(apiKey, model, system, "Percakapan: $convName\n$lines", json = false).trim()
+    }
+
     /** Dipakai tombol "Tes koneksi". */
     fun test(apiKey: String, model: String): String =
         generate(apiKey, model, "Jawab sangat singkat.", "Balas dengan kata: OK", json = false)

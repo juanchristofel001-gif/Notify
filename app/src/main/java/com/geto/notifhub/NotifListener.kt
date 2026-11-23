@@ -71,7 +71,7 @@ class NotifListener : NotificationListenerService() {
         var handledAsMessages = false
         val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)
         if (style != null && style.messages.isNotEmpty()) {
-            val conv = style.conversationTitle?.toString()?.trim()
+            val conv = style.conversationTitle?.toString()?.let { Db.cleanThread(it) }
             val isGroup = style.isGroupConversation
             for (m in style.messages) {
                 // person == null artinya pesan dari diri sendiri (balasan kita)
@@ -83,7 +83,8 @@ class NotifListener : NotificationListenerService() {
                 val ts = if (m.timestamp > 0) m.timestamp else sbn.postTime
                 val hash = "m|$pkg|$t|$text|$ts"
                 if (db.exists(hash, 0)) continue
-                newIds.add(db.insert(pkg, app, t, text, ts, hash, category, isGroup, true))
+                val thread = if (!conv.isNullOrEmpty()) conv else sender
+                newIds.add(db.insert(pkg, app, t, text, ts, hash, category, isGroup, true, thread))
             }
         }
 
@@ -98,7 +99,11 @@ class NotifListener : NotificationListenerService() {
             if (db.exists(hash, sbn.postTime - 30L * 60 * 1000)) return
             val isMessage = n.category == Notification.CATEGORY_MESSAGE
             newIds.add(
-                db.insert(pkg, app, title.ifEmpty { app }, text, sbn.postTime, hash, category, false, isMessage)
+                db.insert(
+                    pkg, app, title.ifEmpty { app }, text, sbn.postTime, hash, category, false, isMessage,
+                    // Chat/email dikelompokkan per pengirim; notifikasi lain per aplikasi
+                    if (category == Categories.KOMUNIKASI || isMessage) Db.cleanThread(title) else "",
+                )
             )
         }
 

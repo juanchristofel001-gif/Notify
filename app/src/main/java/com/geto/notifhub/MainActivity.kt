@@ -40,6 +40,10 @@ class MainActivity : AppCompatActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private lateinit var db: Db
     private lateinit var adapter: NotifAdapter
+    private lateinit var groupAdapter: GroupAdapter
+    private var grouped = true
+    private val collapsedApps = HashSet<String>()
+    private var lastItems: List<NotifItem> = emptyList()
     private lateinit var list: RecyclerView
     private lateinit var chips: ChipGroup
     private lateinit var catChips: ChipGroup
@@ -99,8 +103,10 @@ class MainActivity : AppCompatActivity() {
         careBtn.setOnClickListener { startActivity(Intent(this, HabitActivity::class.java)) }
 
         adapter = NotifAdapter(::open, ::changePriority)
+        groupAdapter = GroupAdapter(::toggleApp, ::openThread)
+        grouped = Prefs(this).groupedView
         list.layoutManager = LinearLayoutManager(this)
-        list.adapter = adapter
+        list.adapter = if (grouped) groupAdapter else adapter
         list.itemAnimator = DefaultItemAnimator().apply {
             supportsChangeAnimations = false      // tidak berkedip saat isi kartu berubah
             addDuration = 260
@@ -186,7 +192,7 @@ class MainActivity : AppCompatActivity() {
             val byCat = db.unreadByCategory()
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                adapter.submitList(items) {
+                submitItems(items) {
                     if (animateList) list.scheduleLayoutAnimation()
                 }
                 showEmpty(items.isEmpty())
@@ -196,6 +202,34 @@ class MainActivity : AppCompatActivity() {
                 updateError()
             }
         }
+    }
+
+    private fun submitItems(items: List<NotifItem>, after: () -> Unit) {
+        lastItems = items
+        if (grouped) groupAdapter.submitList(Grouping.build(items, collapsedApps)) { after() }
+        else adapter.submitList(items) { after() }
+    }
+
+    private fun toggleApp(h: Row.AppHeader) {
+        if (!collapsedApps.remove(h.pkg)) collapsedApps.add(h.pkg)
+        groupAdapter.submitList(Grouping.build(lastItems, collapsedApps))
+    }
+
+    private fun openThread(t: Row.Thread) {
+        startActivity(
+            Intent(this, ThreadActivity::class.java)
+                .putExtra(ThreadActivity.EXTRA_PKG, t.pkg)
+                .putExtra(ThreadActivity.EXTRA_THREAD, t.thread)
+                .putExtra(ThreadActivity.EXTRA_TITLE, "${t.displayName} · ${t.app}")
+        )
+    }
+
+    private fun toggleView() {
+        grouped = !grouped
+        Prefs(this).groupedView = grouped
+        list.adapter = if (grouped) groupAdapter else adapter
+        Toast.makeText(this, if (grouped) "Tampilan per percakapan" else "Tampilan linimasa", Toast.LENGTH_SHORT).show()
+        switchList()
     }
 
     /** Ganti isi list dengan fade halus, tanpa kedip kosong. */
@@ -210,7 +244,7 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     list.itemAnimator?.endAnimations()
-                    adapter.submitList(items) {
+                    submitItems(items) {
                         list.scrollToPosition(0)
                         list.animate().alpha(1f).translationY(0f).setDuration(240)
                             .setInterpolator(DecelerateInterpolator()).start()
@@ -469,6 +503,10 @@ class MainActivity : AppCompatActivity() {
         val cb = object : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT) {
             override fun getSwipeThreshold(vh: RecyclerView.ViewHolder): Float = 0.35f
 
+            override fun getSwipeDirs(rv: RecyclerView, vh: RecyclerView.ViewHolder): Int =
+                if (vh.itemViewType == GroupAdapter.TYPE_HEADER && rv.adapter === groupAdapter) 0
+                else super.getSwipeDirs(rv, vh)
+
             override fun onChildDraw(
                 c: Canvas, rv: RecyclerView, vh: RecyclerView.ViewHolder,
                 dX: Float, dY: Float, actionState: Int, isActive: Boolean,
@@ -492,8 +530,13 @@ class MainActivity : AppCompatActivity() {
 
             override fun clearView(rv: RecyclerView, vh: RecyclerView.ViewHolder) {
                 super.clearView(rv, vh)
-                val item = adapter.itemAt(vh.bindingAdapterPosition)
-                vh.itemView.alpha = if (item?.read == true) 0.55f else 1f
+                if (rv.adapter === groupAdapter) {
+                    val row = groupAdapter.rowAt(vh.bindingAdapterPosition) as? Row.Thread
+                    vh.itemView.alpha = if (row != null && row.unread == 0) 0.6f else 1f
+                } else {
+                    val item = adapter.itemAt(vh.bindingAdapterPosition)
+                    vh.itemView.alpha = if (item?.read == true) 0.55f else 1f
+                }
             }
 
             override fun onMove(
@@ -502,6 +545,15 @@ class MainActivity : AppCompatActivity() {
 
             override fun onSwiped(vh: RecyclerView.ViewHolder, direction: Int) {
                 val pos = vh.bindingAdapterPosition
+                if (list.adapter === groupAdapter) {
+                    val row = groupAdapter.rowAt(pos) as? Row.Thread
+                    groupAdapter.notifyItemChanged(pos)
+                    if (row != null) io.execute {
+                        db.markThreadRead(row.pkg, row.thread)
+                        runOnUiThread { refresh() }
+                    }
+                    return
+                }
                 val item = adapter.itemAt(pos)
                 adapter.notifyItemChanged(pos)
                 if (item == null) return
@@ -562,6 +614,7 @@ class MainActivity : AppCompatActivity() {
         popup.menu.removeItem(R.id.action_settings)
         popup.setOnMenuItemClickListener { mi ->
             when (mi.itemId) {
+                R.id.action_view -> toggleView()
                 R.id.action_reprocess -> io.execute {
                     val n = db.resetRuleBased()
                     Classifier.schedule(this, 0)

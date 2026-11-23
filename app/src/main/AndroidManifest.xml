@@ -40,6 +40,10 @@
             android:exported="false"
             android:label="Rawat &amp; Rutinitas" />
 
+        <activity
+            android:name=".ThreadActivity"
+            android:exported="false" />
+
         <service
             android:name=".NotifListener"
             android:exported="false"

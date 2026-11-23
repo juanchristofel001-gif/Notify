@@ -28,6 +28,11 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("all_apps", true)
         set(v) = sp.edit().putBoolean("all_apps", v).apply()
 
+    /** true = dikelompokkan per aplikasi & percakapan, false = linimasa biasa. */
+    var groupedView: Boolean
+        get() = sp.getBoolean("grouped_view", true)
+        set(v) = sp.edit().putBoolean("grouped_view", v).apply()
+
     var alertUrgent: Boolean
         get() = sp.getBoolean("alert_urgent", true)
         set(v) = sp.edit().putBoolean("alert_urgent", v).apply()
