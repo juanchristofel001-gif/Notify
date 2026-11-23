@@ -52,7 +52,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var headline: TextView
     private lateinit var sub: TextView
     private lateinit var bubble: TextView
-    private lateinit var mascot: ImageView
+    private lateinit var mascot: View
+    private lateinit var faceA: ImageView
+    private lateinit var faceB: ImageView
+    private var frontIsA = true
+    private var currentFace = 0
+    private var baseFace = R.drawable.mascot_normal
+    private var flashing = false
+    private val restoreFace = Runnable {
+        flashing = false
+        showFace(baseFace)
+    }
 
     private val ui = Handler(Looper.getMainLooper())
     private val debouncedRefresh = Runnable { refresh() }
@@ -92,6 +102,9 @@ class MainActivity : AppCompatActivity() {
         sub = findViewById(R.id.sub)
         bubble = findViewById(R.id.bubble)
         mascot = findViewById(R.id.mascot)
+        faceA = findViewById(R.id.mascot_a)
+        faceB = findViewById(R.id.mascot_b)
+        currentFace = R.drawable.mascot_normal
 
         adapter = NotifAdapter(::open, ::changePriority)
         list.layoutManager = LinearLayoutManager(this)
@@ -123,6 +136,7 @@ class MainActivity : AppCompatActivity() {
         }
         mascot.setOnClickListener {
             mascotCtl.react()
+            flashFace(R.drawable.mascot_happy, 1800)
             idleIdx++
             updateBubble(force = true)
         }
@@ -160,6 +174,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        ui.removeCallbacksAndMessages(null)
         countAnim?.cancel()
         super.onDestroy()
     }
@@ -253,8 +268,12 @@ class MainActivity : AppCompatActivity() {
         animateCount(unread)
         sub.text = if (unread == 0) "Kotak notifikasi bersih" else "$urgent urgent · $penting penting"
 
-        if (lastUrgent >= 0 && urgent > lastUrgent) mascotCtl.react(strong = true)
+        if (lastUrgent >= 0 && urgent > lastUrgent) {
+            mascotCtl.react(strong = true)
+            flashFace(R.drawable.mascot_surprised, 2600)
+        }
         lastUrgent = urgent
+        setBaseFace(faceFor(counts))
         updateBubble(force = false)
     }
 
@@ -275,6 +294,52 @@ class MainActivity : AppCompatActivity() {
             }
             start()
         }
+    }
+
+    // ---------- Ekspresi maskot ----------
+
+    private fun faceFor(counts: Map<String, Int>): Int {
+        val unread = counts.values.sum()
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        return when {
+            !hasAccess -> R.drawable.mascot_cry
+            Classifier.lastError != null && Prefs(this).apiKey.isNotEmpty() -> R.drawable.mascot_cry
+            (counts[Priority.URGENT] ?: 0) > 0 -> R.drawable.mascot_angry
+            unread == 0 && (hour >= 22 || hour < 5) -> R.drawable.mascot_sleepy
+            unread == 0 -> R.drawable.mascot_happy
+            else -> R.drawable.mascot_normal
+        }
+    }
+
+    private fun setBaseFace(res: Int) {
+        baseFace = res
+        if (!flashing) showFace(res)
+    }
+
+    /** Ekspresi sementara, lalu kembali ke ekspresi dasar. */
+    private fun flashFace(res: Int, ms: Long) {
+        ui.removeCallbacks(restoreFace)
+        flashing = true
+        showFace(res)
+        ui.postDelayed(restoreFace, ms)
+    }
+
+    /** Crossfade ke ekspresi baru dengan efek "pop" kecil. */
+    private fun showFace(res: Int) {
+        if (res == currentFace) return
+        currentFace = res
+        val front = if (frontIsA) faceA else faceB
+        val back = if (frontIsA) faceB else faceA
+        front.animate().cancel()
+        back.animate().cancel()
+        back.setImageResource(res)
+        back.alpha = 0f
+        back.scaleX = 0.9f
+        back.scaleY = 0.9f
+        back.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(320)
+            .setInterpolator(OvershootInterpolator(2f)).start()
+        front.animate().alpha(0f).scaleX(1.05f).scaleY(1.05f).setDuration(220).start()
+        frontIsA = !frontIsA
     }
 
     private fun bubbleMessage(): String {

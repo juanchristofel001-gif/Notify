@@ -52,7 +52,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:layout_marginEnd="118dp"
+            android:layout_marginEnd="136dp"
             android:orientation="vertical">
 
             <TextView
@@ -99,20 +99,36 @@
             android:layout_width="72dp"
             android:layout_height="14dp"
             android:layout_gravity="bottom|end"
-            android:layout_marginEnd="23dp"
-            android:layout_marginBottom="-8dp"
+            android:layout_marginEnd="36dp"
+            android:layout_marginBottom="-6dp"
             android:background="@drawable/shadow_bg" />
 
-        <ImageView
+        <FrameLayout
             android:id="@+id/mascot"
-            android:layout_width="110dp"
-            android:layout_height="146dp"
+            android:layout_width="140dp"
+            android:layout_height="140dp"
             android:layout_gravity="bottom|end"
-            android:layout_marginEnd="4dp"
             android:layout_marginTop="44dp"
+            android:clickable="true"
             android:contentDescription="Maskot NotifHub"
-            android:scaleType="fitCenter"
-            android:src="@drawable/mascot" />
+            android:focusable="true">
+
+            <ImageView
+                android:id="@+id/mascot_a"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:importantForAccessibility="no"
+                android:scaleType="fitCenter"
+                android:src="@drawable/mascot_normal" />
+
+            <ImageView
+                android:id="@+id/mascot_b"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:alpha="0"
+                android:importantForAccessibility="no"
+                android:scaleType="fitCenter" />
+        </FrameLayout>
     </FrameLayout>
 
     <!-- Peringatan akses / error -->
