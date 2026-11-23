@@ -135,6 +135,14 @@
             android:text="Beri peringatan khusus untuk notifikasi URGENT"
             android:textColor="@color/text_primary" />
 
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/sw_image_mascot"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Pakai gambar maskot (Zhuxin) alih-alih maskot 3D Nofi"
+            android:textColor="@color/text_primary" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_save"
             android:layout_width="match_parent"

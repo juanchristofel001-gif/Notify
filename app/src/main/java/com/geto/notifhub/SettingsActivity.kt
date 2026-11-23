@@ -19,6 +19,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var vip: EditText
     private lateinit var swAll: SwitchCompat
     private lateinit var swAlert: SwitchCompat
+    private lateinit var swImage: SwitchCompat
     private lateinit var status: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,6 +35,7 @@ class SettingsActivity : AppCompatActivity() {
         vip = findViewById(R.id.vip)
         swAll = findViewById(R.id.sw_all)
         swAlert = findViewById(R.id.sw_alert)
+        swImage = findViewById(R.id.sw_image_mascot)
         status = findViewById(R.id.status)
 
         apiKey.setText(prefs.apiKey)
@@ -42,6 +44,7 @@ class SettingsActivity : AppCompatActivity() {
         vip.setText(prefs.vipRaw)
         swAll.isChecked = prefs.allApps
         swAlert.isChecked = prefs.alertUrgent
+        swImage.isChecked = prefs.useImageMascot
 
         findViewById<Button>(R.id.btn_access).setOnClickListener {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
@@ -73,6 +76,7 @@ class SettingsActivity : AppCompatActivity() {
         prefs.vipRaw = vip.text.toString()
         prefs.allApps = swAll.isChecked
         prefs.alertUrgent = swAlert.isChecked
+        prefs.useImageMascot = swImage.isChecked
     }
 
     override fun onPause() {

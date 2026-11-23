@@ -45,6 +45,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var sub: TextView
     private lateinit var bubble: TextView
     private lateinit var mascot: ImageView
+    private lateinit var mascot3d: MascotView
+    private lateinit var mascotShadow: View
+    private var useImage = false
 
     private var filter: String? = null
     private var category: String? = null
@@ -82,6 +85,8 @@ class MainActivity : AppCompatActivity() {
         sub = findViewById(R.id.sub)
         bubble = findViewById(R.id.bubble)
         mascot = findViewById(R.id.mascot)
+        mascot3d = findViewById(R.id.mascot3d)
+        mascotShadow = findViewById(R.id.mascot_shadow)
 
         adapter = NotifAdapter(::open, ::changePriority)
         list.layoutManager = LinearLayoutManager(this)
@@ -98,11 +103,13 @@ class MainActivity : AppCompatActivity() {
         banner.setOnClickListener {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
-        mascot.setOnClickListener {
-            mascotCtl.react()
+        val onMascotTap = View.OnClickListener {
+            if (useImage) mascotCtl.react() else mascot3d.react()
             idleIdx++
             updateBubble(force = true)
         }
+        mascot.setOnClickListener(onMascotTap)
+        mascot3d.setOnClickListener(onMascotTap)
 
         greeting.text = greetingText()
         headline.text = "Memuat…"
@@ -122,7 +129,7 @@ class MainActivity : AppCompatActivity() {
         banner.visibility = if (hasAccess) View.GONE else View.VISIBLE
         greeting.text = greetingText()
         Bus.listener = { refresh() }
-        mascotCtl.start()
+        applyMascotStyle()
         refresh()
         Classifier.schedule(this, 0)
     }
@@ -131,6 +138,7 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
         Bus.listener = null
         mascotCtl.stop()
+        mascot3d.stop()
     }
 
     override fun onDestroy() {
@@ -188,8 +196,11 @@ class MainActivity : AppCompatActivity() {
         animateCount(unread)
         sub.text = if (unread == 0) "Kotak notifikasi bersih" else "$urgent urgent · $penting penting"
 
-        if (lastUrgent >= 0 && urgent > lastUrgent) mascotCtl.react(strong = true)
+        if (lastUrgent >= 0 && urgent > lastUrgent) {
+            if (useImage) mascotCtl.react(strong = true) else mascot3d.react(strong = true)
+        }
         lastUrgent = urgent
+        mascot3d.setMood(moodFor(counts))
         updateBubble(force = false)
     }
 
@@ -209,6 +220,34 @@ class MainActivity : AppCompatActivity() {
                 headline.text = "$v belum dibaca"
             }
             start()
+        }
+    }
+
+    private fun applyMascotStyle() {
+        useImage = Prefs(this).useImageMascot
+        mascot.visibility = if (useImage) View.VISIBLE else View.GONE
+        mascotShadow.visibility = if (useImage) View.VISIBLE else View.GONE
+        mascot3d.visibility = if (useImage) View.GONE else View.VISIBLE
+        if (useImage) {
+            mascot3d.stop()
+            mascotCtl.start()
+        } else {
+            mascotCtl.stop()
+            mascot3d.start()
+        }
+    }
+
+    private fun moodFor(counts: Map<String, Int>): MascotView.Mood {
+        val unread = counts.values.sum()
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        return when {
+            !hasAccess -> MascotView.Mood.WORRIED
+            Classifier.lastError != null && Prefs(this).apiKey.isNotEmpty() -> MascotView.Mood.WORRIED
+            (counts[Priority.URGENT] ?: 0) > 0 -> MascotView.Mood.FOCUSED
+            (counts[Priority.PENTING] ?: 0) > 0 -> MascotView.Mood.IDLE
+            unread == 0 && (hour >= 22 || hour < 5) -> MascotView.Mood.SLEEPY
+            unread == 0 -> MascotView.Mood.HAPPY
+            else -> MascotView.Mood.IDLE
         }
     }
 
@@ -238,10 +277,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun playIntro() {
         val dp = resources.displayMetrics.density
-        mascot.alpha = 0f
-        mascot.translationX = 40 * dp
-        mascot.animate().alpha(1f).translationX(0f).setStartDelay(150).setDuration(600)
-            .setInterpolator(OvershootInterpolator(1.4f)).start()
+        for (m in listOf<View>(mascot, mascot3d)) {
+            m.alpha = 0f
+            m.translationX = 40 * dp
+            m.animate().alpha(1f).translationX(0f).setStartDelay(150).setDuration(600)
+                .setInterpolator(OvershootInterpolator(1.4f)).start()
+        }
         listOf(greeting, headline, sub, bubble).forEachIndexed { i, v ->
             v.alpha = 0f
             v.translationY = 12 * dp
