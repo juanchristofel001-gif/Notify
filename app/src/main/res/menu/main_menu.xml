@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/action_settings" android:title="Pengaturan" />
+    <item android:id="@+id/action_reprocess" android:title="Pilah ulang dengan AI" />
+    <item android:id="@+id/action_read_all" android:title="Tandai semua dibaca" />
+    <item android:id="@+id/action_clear" android:title="Hapus semua" />
+</menu>

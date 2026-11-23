@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand">#3F51B5</color>
+    <color name="p_urgent">#D32F2F</color>
+    <color name="p_penting">#F57C00</color>
+    <color name="p_normal">#1976D2</color>
+    <color name="p_rendah">#9E9E9E</color>
+    <color name="p_pending">#CFCFCF</color>
+</resources>

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#FFF3E0"
+        android:padding="12dp"
+        android:text="Akses notifikasi belum aktif. Ketuk di sini untuk mengaktifkan NotifHub."
+        android:textColor="#E65100"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/error"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#FFEBEE"
+        android:padding="10dp"
+        android:textColor="#B71C1C"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:tabMode="scrollable" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <TextView
+            android:id="@+id/empty"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:padding="32dp"
+            android:text="Belum ada notifikasi di sini.\nNotifikasi baru dari semua aplikasi akan muncul otomatis."
+            android:visibility="gone" />
+    </FrameLayout>
+</LinearLayout>
