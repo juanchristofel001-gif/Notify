@@ -85,14 +85,22 @@ object Classifier {
         sb.append(
             """
             Kamu memilah notifikasi HP milik satu orang berdasarkan seberapa cepat ia perlu memperhatikannya.
+            Setiap notifikasi punya "kategori" (Komunikasi, Sosmed, Game, Lainnya), "chat_grup" (true jika dari grup), dan "pesan_langsung" (true jika berupa pesan/DM dari seseorang).
 
             Level:
-            - URGENT: perlu ditindak dalam hitungan menit sampai beberapa jam. Contoh: kode OTP/verifikasi, peringatan keamanan akun atau login baru, transaksi mencurigakan, keluarga/atasan/dosen/HRD menanyakan hal mendesak, tenggat hari ini, keadaan darurat.
-            - PENTING: perlu dibaca atau dibalas hari ini. Contoh: chat pribadi dari orang yang dikenal yang butuh jawaban, email kerja/kampus/rekrutmen/wawancara, tagihan, perubahan jadwal.
-            - NORMAL: berguna tapi tidak mendesak. Contoh: obrolan santai, grup yang relevan, info atau pembaruan biasa.
-            - RENDAH: aman diabaikan. Contoh: promo dan diskon dari e-commerce/ojol, newsletter, like/komentar/saran teman/live di media sosial, rekomendasi video, grup ramai yang tidak relevan, notifikasi sistem atau game.
+            - URGENT: perlu ditindak dalam hitungan menit sampai beberapa jam (OTP/kode verifikasi, peringatan keamanan akun, transaksi mencurigakan, keadaan darurat, tenggat hari ini, atasan/dosen/HRD/keluarga menanyakan hal mendesak).
+            - PENTING: perlu dibaca atau dibalas hari ini.
+            - NORMAL: berguna tapi tidak mendesak.
+            - RENDAH: aman diabaikan.
 
-            Kalau ragu antara dua level, pilih yang lebih rendah, kecuali isinya menyangkut keamanan akun atau uang.
+            Aturan per kategori:
+            - Komunikasi, chat pribadi (chat_grup=false): pesan dari orang yang butuh jawaban → PENTING; basa-basi/stiker/"ok" → NORMAL; mendesak → URGENT. Email kerja/kampus/rekrutmen → PENTING; newsletter/promo email → RENDAH.
+            - Komunikasi, chat grup (chat_grup=true): default RENDAH (obrolan ramai) atau NORMAL (info yang relevan). Naikkan ke PENTING/URGENT HANYA jika menyebut/me-mention pengguna, berisi tenggat hari ini, pengumuman resmi penting (kelas batal, rapat dipindah), keadaan darurat, atau dikirim kontak VIP.
+            - Sosmed: DM/pesan langsung (pesan_langsung=true atau isinya pesan dari seseorang) → PENTING (URGENT jika mendesak); komentar/mention langsung ke pengguna → NORMAL; like, follow, saran teman, live, rekomendasi video, "kenangan" → RENDAH.
+            - Game: default RENDAH (energi penuh, event, hadiah harian, ajakan main). Hanya keamanan akun atau transaksi/top-up → PENTING atau URGENT.
+            - Lainnya: transaksi bank/e-wallet dan OTP → URGENT; status paket/ojol/janji temu → NORMAL atau PENTING; promo/diskon → RENDAH.
+
+            Kalau ragu antara dua level, pilih yang lebih rendah, kecuali menyangkut keamanan akun atau uang.
             """.trimIndent()
         )
         if (prefs.aboutMe.isNotBlank()) {
@@ -165,19 +173,19 @@ object Rules {
         "saran teman", "is live", "sedang live", "kenangan", "memories",
     )
 
-    private val SOCIAL_FEEDS = setOf(
-        "com.facebook.katana", "com.facebook.lite", "com.instagram.android",
-        "com.twitter.android", "com.zhiliaoapp.musically", "com.google.android.youtube",
-    )
-
     fun classify(item: NotifItem, vip: List<String>): Pair<String, String> {
         val text = "${item.title} ${item.body}".lowercase(Locale.ROOT)
         val title = item.title.lowercase(Locale.ROOT)
+        val isVip = vip.any { title.contains(it.lowercase(Locale.ROOT)) }
         return when {
             urgentKw.any { text.contains(it) } -> Priority.URGENT to "Kata kunci mendesak"
-            vip.any { title.contains(it.lowercase(Locale.ROOT)) } -> Priority.PENTING to "Kontak VIP"
+            isVip -> Priority.PENTING to "Kontak VIP"
             lowKw.any { text.contains(it) } -> Priority.RENDAH to "Promo / aktivitas sosmed"
-            item.pkg in SOCIAL_FEEDS -> Priority.RENDAH to "Notifikasi media sosial umum"
+            item.category == Categories.GAME -> Priority.RENDAH to "Notifikasi game"
+            item.category == Categories.KOMUNIKASI && item.isGroup -> Priority.RENDAH to "Obrolan grup"
+            item.category == Categories.KOMUNIKASI && item.isMessage -> Priority.PENTING to "Chat pribadi"
+            item.category == Categories.SOSMED && item.isMessage -> Priority.PENTING to "DM sosmed"
+            item.category == Categories.SOSMED -> Priority.RENDAH to "Aktivitas sosmed"
             else -> Priority.NORMAL to "Tidak ada tanda khusus"
         }
     }

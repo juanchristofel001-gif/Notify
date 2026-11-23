@@ -1,7 +1,6 @@
 package com.geto.notifhub
 
 import android.Manifest
-import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.ActivityOptions
 import android.app.PendingIntent
@@ -11,7 +10,6 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
-import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import android.widget.ImageView
@@ -36,6 +34,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: NotifAdapter
     private lateinit var list: RecyclerView
     private lateinit var chips: ChipGroup
+    private lateinit var catChips: ChipGroup
+    private lateinit var mascotCtl: MascotController
     private lateinit var banner: TextView
     private lateinit var errorView: TextView
     private lateinit var empty: View
@@ -47,8 +47,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var mascot: ImageView
 
     private var filter: String? = null
+    private var category: String? = null
     private val chipByFilter = LinkedHashMap<String?, Chip>()
-    private val animators = ArrayList<ValueAnimator>()
+    private val chipByCategory = LinkedHashMap<String?, Chip>()
     private var countAnim: ValueAnimator? = null
     private var shownUnread = 0
     private var lastUrgent = -1
@@ -71,6 +72,7 @@ class MainActivity : AppCompatActivity() {
 
         list = findViewById(R.id.list)
         chips = findViewById(R.id.chips)
+        catChips = findViewById(R.id.cat_chips)
         banner = findViewById(R.id.banner)
         errorView = findViewById(R.id.error)
         empty = findViewById(R.id.empty)
@@ -85,7 +87,9 @@ class MainActivity : AppCompatActivity() {
         list.layoutManager = LinearLayoutManager(this)
         list.adapter = adapter
         attachSwipe()
+        buildCategoryChips()
         buildChips()
+        mascotCtl = MascotController(mascot, findViewById(R.id.mascot_shadow))
 
         findViewById<View>(R.id.btn_settings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
@@ -95,14 +99,13 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
         mascot.setOnClickListener {
-            bounceMascot()
+            mascotCtl.react()
             idleIdx++
             updateBubble(force = true)
         }
 
         greeting.text = greetingText()
         headline.text = "Memuat…"
-        startMascotIdle()
         playIntro()
 
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -119,6 +122,7 @@ class MainActivity : AppCompatActivity() {
         banner.visibility = if (hasAccess) View.GONE else View.VISIBLE
         greeting.text = greetingText()
         Bus.listener = { refresh() }
+        mascotCtl.start()
         refresh()
         Classifier.schedule(this, 0)
     }
@@ -126,10 +130,10 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         Bus.listener = null
+        mascotCtl.stop()
     }
 
     override fun onDestroy() {
-        animators.forEach { it.cancel() }
         countAnim?.cancel()
         super.onDestroy()
     }
@@ -138,9 +142,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun refresh(animateList: Boolean = false) {
         val f = filter
+        val cat = category
         io.execute {
-            val items = db.query(f)
-            val counts = db.unreadCounts()
+            val items = db.query(cat, f)
+            val counts = db.unreadCounts(cat)
+            val total = db.unreadCounts(null)
+            val byCat = db.unreadByCategory()
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 adapter.submitList(items) {
@@ -148,17 +155,18 @@ class MainActivity : AppCompatActivity() {
                 }
                 showEmpty(items.isEmpty())
                 updateChips(counts)
-                updateHeader(counts)
+                updateCategoryChips(byCat, total.values.sum())
+                updateHeader(total)
                 updateError()
             }
         }
     }
 
     private fun showEmpty(isEmpty: Boolean) {
-        emptyText.text = when (filter) {
-            null -> "Belum ada notifikasi.\nYang baru akan muncul otomatis di sini."
-            Priority.URGENT -> "Tidak ada yang urgent. Aman!"
-            else -> "Kosong di kategori ini."
+        emptyText.text = when {
+            filter == null && category == null -> "Belum ada notifikasi.\nYang baru akan muncul otomatis di sini."
+            filter == Priority.URGENT -> "Tidak ada yang urgent. Aman!"
+            else -> "Kosong di sini."
         }
         if (isEmpty && empty.visibility != View.VISIBLE) {
             empty.alpha = 0f
@@ -180,7 +188,7 @@ class MainActivity : AppCompatActivity() {
         animateCount(unread)
         sub.text = if (unread == 0) "Kotak notifikasi bersih" else "$urgent urgent · $penting penting"
 
-        if (lastUrgent >= 0 && urgent > lastUrgent) bounceMascot()
+        if (lastUrgent >= 0 && urgent > lastUrgent) mascotCtl.react(strong = true)
         lastUrgent = urgent
         updateBubble(force = false)
     }
@@ -228,34 +236,6 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
-    private fun startMascotIdle() {
-        val dp = resources.displayMetrics.density
-        animators += ObjectAnimator.ofFloat(mascot, View.TRANSLATION_Y, 0f, -8 * dp).apply {
-            duration = 1800
-            repeatMode = ValueAnimator.REVERSE
-            repeatCount = ValueAnimator.INFINITE
-            interpolator = AccelerateDecelerateInterpolator()
-            start()
-        }
-        animators += ObjectAnimator.ofFloat(mascot, View.ROTATION, -2.5f, 2.5f).apply {
-            duration = 2600
-            repeatMode = ValueAnimator.REVERSE
-            repeatCount = ValueAnimator.INFINITE
-            interpolator = AccelerateDecelerateInterpolator()
-            start()
-        }
-    }
-
-    private fun bounceMascot() {
-        mascot.animate().cancel()
-        mascot.animate().scaleX(1.15f).scaleY(1.15f).setStartDelay(0).setDuration(140)
-            .setInterpolator(DecelerateInterpolator())
-            .withEndAction {
-                mascot.animate().scaleX(1f).scaleY(1f).setDuration(420)
-                    .setInterpolator(OvershootInterpolator(3f)).start()
-            }.start()
-    }
-
     private fun playIntro() {
         val dp = resources.displayMetrics.density
         mascot.alpha = 0f
@@ -282,7 +262,7 @@ class MainActivity : AppCompatActivity() {
     private fun buildChips() {
         val filters: List<String?> = listOf(null) + Priority.LEVELS
         filters.forEach { f ->
-            val chip = layoutInflater.inflate(R.layout.chip_filter, chips, false) as Chip
+            val chip = layoutInflater.inflate(R.layout.chip_small, chips, false) as Chip
             chip.id = View.generateViewId()
             chip.text = chipLabel(f, 0)
             chips.addView(chip)
@@ -297,6 +277,38 @@ class MainActivity : AppCompatActivity() {
                 adapter.submitList(null)
                 refresh(animateList = true)
             }
+        }
+    }
+
+    private fun buildCategoryChips() {
+        val cats: List<String?> = listOf(null) + Categories.ALL
+        cats.forEach { c ->
+            val chip = layoutInflater.inflate(R.layout.chip_filter, catChips, false) as Chip
+            chip.id = View.generateViewId()
+            chip.text = categoryLabel(c, 0)
+            catChips.addView(chip)
+            chipByCategory[c] = chip
+        }
+        chipByCategory[null]?.isChecked = true
+        catChips.setOnCheckedStateChangeListener { group, ids ->
+            val checked = ids.firstOrNull()?.let { group.findViewById<Chip>(it) } ?: return@setOnCheckedStateChangeListener
+            val newCat = chipByCategory.entries.firstOrNull { it.value === checked }?.key
+            if (newCat != category) {
+                category = newCat
+                adapter.submitList(null)
+                refresh(animateList = true)
+            }
+        }
+    }
+
+    private fun categoryLabel(c: String?, count: Int): String {
+        val base = Categories.emoji(c) + " " + (if (c == null) "Semua" else Categories.label(c))
+        return if (count > 0) "$base  $count" else base
+    }
+
+    private fun updateCategoryChips(byCat: Map<String, Int>, total: Int) {
+        chipByCategory.forEach { (c, chip) ->
+            chip.text = categoryLabel(c, if (c == null) total else byCat[c] ?: 0)
         }
     }
 

@@ -61,6 +61,7 @@ class NotifListener : NotificationListenerService() {
         if (n.category in SKIP_CATEGORIES) return
 
         val app = appLabel(pkg)
+        val category = Categories.of(this, pkg, n)
         val db = Db.get(this)
         val newIds = ArrayList<Long>()
         val extras = n.extras
@@ -71,6 +72,7 @@ class NotifListener : NotificationListenerService() {
         val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)
         if (style != null && style.messages.isNotEmpty()) {
             val conv = style.conversationTitle?.toString()?.trim()
+            val isGroup = style.isGroupConversation
             for (m in style.messages) {
                 // person == null artinya pesan dari diri sendiri (balasan kita)
                 val sender = m.person?.name?.toString()?.trim() ?: continue
@@ -81,7 +83,7 @@ class NotifListener : NotificationListenerService() {
                 val ts = if (m.timestamp > 0) m.timestamp else sbn.postTime
                 val hash = "m|$pkg|$t|$text|$ts"
                 if (db.exists(hash, 0)) continue
-                newIds.add(db.insert(pkg, app, t, text, ts, hash))
+                newIds.add(db.insert(pkg, app, t, text, ts, hash, category, isGroup, true))
             }
         }
 
@@ -94,7 +96,10 @@ class NotifListener : NotificationListenerService() {
             val hash = "n|$pkg|$title|$text"
             // Aplikasi sering memperbarui notifikasi yang sama; abaikan duplikat dalam 30 menit
             if (db.exists(hash, sbn.postTime - 30L * 60 * 1000)) return
-            newIds.add(db.insert(pkg, app, title.ifEmpty { app }, text, sbn.postTime, hash))
+            val isMessage = n.category == Notification.CATEGORY_MESSAGE
+            newIds.add(
+                db.insert(pkg, app, title.ifEmpty { app }, text, sbn.postTime, hash, category, false, isMessage)
+            )
         }
 
         if (newIds.isEmpty()) return

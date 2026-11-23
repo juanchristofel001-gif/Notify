@@ -73,7 +73,11 @@ class NotifAdapter(
         h.avatar.text = item.app.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
         h.avatar.backgroundTintList = ColorStateList.valueOf(avatarColor)
 
-        h.app.text = item.app
+        h.app.text = when {
+            item.isGroup -> "${item.app} · Grup"
+            item.category == Categories.SOSMED && item.isMessage -> "${item.app} · DM"
+            else -> item.app
+        }
         h.time.text = if (DateUtils.isToday(item.ts)) timeFmt.format(Date(item.ts))
         else dateFmt.format(Date(item.ts))
         h.dot.visibility = if (item.read) View.GONE else View.VISIBLE

@@ -86,6 +86,15 @@
                 android:textSize="13sp" />
         </LinearLayout>
 
+        <View
+            android:id="@+id/mascot_shadow"
+            android:layout_width="72dp"
+            android:layout_height="14dp"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="23dp"
+            android:layout_marginBottom="-8dp"
+            android:background="@drawable/shadow_bg" />
+
         <ImageView
             android:id="@+id/mascot"
             android:layout_width="110dp"
@@ -128,7 +137,7 @@
         android:textSize="12sp"
         android:visibility="gone" />
 
-    <!-- Filter -->
+    <!-- Filter: kategori -->
     <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -139,9 +148,28 @@
         android:scrollbars="none">
 
         <com.google.android.material.chip.ChipGroup
+            android:id="@+id/cat_chips"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:selectionRequired="true"
+            app:singleLine="true"
+            app:singleSelection="true" />
+    </HorizontalScrollView>
+
+    <!-- Filter: prioritas -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:clipToPadding="false"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:scrollbars="none">
+
+        <com.google.android.material.chip.ChipGroup
             android:id="@+id/chips"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            app:chipSpacingHorizontal="6dp"
             app:selectionRequired="true"
             app:singleLine="true"
             app:singleSelection="true" />

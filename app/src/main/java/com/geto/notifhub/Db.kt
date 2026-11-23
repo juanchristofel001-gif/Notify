@@ -32,9 +32,12 @@ data class NotifItem(
     val reason: String,
     val source: String,
     val read: Boolean,
+    val category: String,
+    val isGroup: Boolean,
+    val isMessage: Boolean,
 )
 
-class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db", null, 1) {
+class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db", null, 2) {
 
     companion object {
         @Volatile
@@ -46,7 +49,7 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
             }
 
         private const val COLS =
-            "id, pkg, app, title, body, ts, priority, reason, source, is_read"
+            "id, pkg, app, title, body, ts, priority, reason, source, is_read, category, is_group, is_message"
         private const val KEEP_DAYS = 30L
     }
 
@@ -63,14 +66,32 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
                 reason TEXT NOT NULL DEFAULT '',
                 source TEXT NOT NULL DEFAULT '',
                 is_read INTEGER NOT NULL DEFAULT 0,
-                hash TEXT NOT NULL
+                hash TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'lainnya',
+                is_group INTEGER NOT NULL DEFAULT 0,
+                is_message INTEGER NOT NULL DEFAULT 0
             )"""
         )
         db.execSQL("CREATE INDEX idx_hash ON notifs(hash)")
         db.execSQL("CREATE INDEX idx_prio_ts ON notifs(priority, ts)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE notifs ADD COLUMN category TEXT NOT NULL DEFAULT 'lainnya'")
+            db.execSQL("ALTER TABLE notifs ADD COLUMN is_group INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE notifs ADD COLUMN is_message INTEGER NOT NULL DEFAULT 0")
+            // Isi kategori data lama berdasarkan aplikasinya
+            fun setCat(cat: String, pkgs: Set<String>) {
+                val marks = pkgs.joinToString(",") { "?" }
+                db.execSQL("UPDATE notifs SET category = '$cat' WHERE pkg IN ($marks)", pkgs.toTypedArray())
+            }
+            setCat(Categories.KOMUNIKASI, Categories.COMM_PKGS)
+            setCat(Categories.SOSMED, Categories.SOCIAL_PKGS)
+            db.execSQL("UPDATE notifs SET is_group = 1 WHERE category = 'komunikasi' AND title LIKE '% — %'")
+            db.execSQL("UPDATE notifs SET is_message = 1 WHERE hash LIKE 'm|%'")
+        }
+    }
 
     private fun Cursor.toItem() = NotifItem(
         id = getLong(0),
@@ -83,6 +104,9 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
         reason = getString(7),
         source = getString(8),
         read = getInt(9) != 0,
+        category = getString(10),
+        isGroup = getInt(11) != 0,
+        isMessage = getInt(12) != 0,
     )
 
     private fun list(sql: String, args: Array<String>): List<NotifItem> =
@@ -99,7 +123,10 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
             arrayOf(hash, since.toString())
         ).use { it.moveToFirst() }
 
-    fun insert(pkg: String, app: String, title: String, body: String, ts: Long, hash: String): Long {
+    fun insert(
+        pkg: String, app: String, title: String, body: String, ts: Long, hash: String,
+        category: String, isGroup: Boolean, isMessage: Boolean,
+    ): Long {
         val v = ContentValues().apply {
             put("pkg", pkg)
             put("app", app)
@@ -108,26 +135,43 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
             put("ts", ts)
             put("priority", Priority.PENDING)
             put("hash", hash)
+            put("category", category)
+            put("is_group", if (isGroup) 1 else 0)
+            put("is_message", if (isMessage) 1 else 0)
         }
         val id = writableDatabase.insert("notifs", null, v)
         if (id % 50L == 0L) purgeOld()
         return id
     }
 
-    /** filter = null berarti semua prioritas. */
-    fun query(filter: String?): List<NotifItem> =
-        if (filter == null) {
-            list("SELECT $COLS FROM notifs ORDER BY ts DESC LIMIT 500", emptyArray<String>())
-        } else {
-            list(
-                "SELECT $COLS FROM notifs WHERE priority = ? ORDER BY ts DESC LIMIT 500",
-                arrayOf(filter)
-            )
-        }
+    /** category / priority = null berarti semua. */
+    fun query(category: String?, priority: String?): List<NotifItem> {
+        val where = ArrayList<String>()
+        val args = ArrayList<String>()
+        if (category != null) { where += "category = ?"; args += category }
+        if (priority != null) { where += "priority = ?"; args += priority }
+        val w = if (where.isEmpty()) "" else "WHERE " + where.joinToString(" AND ")
+        return list("SELECT $COLS FROM notifs $w ORDER BY ts DESC LIMIT 500", args.toTypedArray())
+    }
 
-    fun unreadCounts(): Map<String, Int> =
+    /** Jumlah belum dibaca per prioritas (opsional: hanya dalam satu kategori). */
+    fun unreadCounts(category: String? = null): Map<String, Int> {
+        val sql = if (category == null)
+            "SELECT priority, COUNT(*) FROM notifs WHERE is_read = 0 GROUP BY priority"
+        else
+            "SELECT priority, COUNT(*) FROM notifs WHERE is_read = 0 AND category = ? GROUP BY priority"
+        val args = if (category == null) emptyArray<String>() else arrayOf(category)
+        return readableDatabase.rawQuery(sql, args).use { c ->
+            val m = HashMap<String, Int>()
+            while (c.moveToNext()) m[c.getString(0)] = c.getInt(1)
+            m
+        }
+    }
+
+    /** Jumlah belum dibaca per kategori. */
+    fun unreadByCategory(): Map<String, Int> =
         readableDatabase.rawQuery(
-            "SELECT priority, COUNT(*) FROM notifs WHERE is_read = 0 GROUP BY priority",
+            "SELECT category, COUNT(*) FROM notifs WHERE is_read = 0 GROUP BY category",
             emptyArray<String>()
         ).use { c ->
             val m = HashMap<String, Int>()
