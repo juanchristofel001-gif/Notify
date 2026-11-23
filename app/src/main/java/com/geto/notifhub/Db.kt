@@ -46,7 +46,16 @@ data class Habit(
     val streak: Int,
 )
 
-class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db", null, 4) {
+data class Achievement(
+    val id: Long,
+    val name: String,
+    val emoji: String,
+    val points: Int,
+    val timesClaimed: Int,
+    val claimedToday: Boolean,
+)
+
+class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db", null, 5) {
 
     companion object {
         @Volatile
@@ -90,6 +99,26 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
         db.execSQL("CREATE INDEX idx_hash ON notifs(hash)")
         db.execSQL("CREATE INDEX idx_prio_ts ON notifs(priority, ts)")
         createHabitTables(db)
+        createAchievementTables(db)
+    }
+
+    private fun createAchievementTables(db: SQLiteDatabase) {
+        db.execSQL(
+            """CREATE TABLE IF NOT EXISTS achievements(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                emoji TEXT NOT NULL,
+                points INTEGER NOT NULL,
+                archived INTEGER NOT NULL DEFAULT 0
+            )"""
+        )
+        db.execSQL(
+            """CREATE TABLE IF NOT EXISTS achievement_log(
+                ach_id INTEGER NOT NULL,
+                day TEXT NOT NULL,
+                PRIMARY KEY(ach_id, day)
+            )"""
+        )
     }
 
     private fun createHabitTables(db: SQLiteDatabase) {
@@ -127,6 +156,7 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
             db.execSQL("UPDATE notifs SET is_message = 1 WHERE hash LIKE 'm|%'")
         }
         if (oldVersion < 3) createHabitTables(db)
+        if (oldVersion < 5) createAchievementTables(db)
         if (oldVersion < 4) {
             db.execSQL("ALTER TABLE notifs ADD COLUMN thread TEXT NOT NULL DEFAULT ''")
             // Isi thread data lama: "Grup — Pengirim" → "Grup"; chat/email lain → judulnya (pengirim)
@@ -357,6 +387,47 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
     fun habitProgress(): Pair<Int, Int> {
         val list = habits()
         return list.count { it.doneToday } to list.size
+    }
+
+    // ---------- Pencapaian (satu-satunya sumber afeksi) ----------
+
+    fun achievements(): List<Achievement> {
+        val today = dayKey()
+        val out = ArrayList<Achievement>()
+        readableDatabase.rawQuery(
+            """SELECT a.id, a.name, a.emoji, a.points,
+                      (SELECT COUNT(*) FROM achievement_log l WHERE l.ach_id = a.id),
+                      (SELECT COUNT(*) FROM achievement_log l WHERE l.ach_id = a.id AND l.day = ?)
+               FROM achievements a WHERE a.archived = 0 ORDER BY a.id ASC""",
+            arrayOf(today)
+        ).use { c ->
+            while (c.moveToNext()) {
+                out.add(Achievement(c.getLong(0), c.getString(1), c.getString(2), c.getInt(3), c.getInt(4), c.getInt(5) > 0))
+            }
+        }
+        return out
+    }
+
+    fun addAchievement(name: String, emoji: String, points: Int) {
+        val v = ContentValues().apply {
+            put("name", name)
+            put("emoji", emoji)
+            put("points", points)
+        }
+        writableDatabase.insert("achievements", null, v)
+    }
+
+    fun archiveAchievement(id: Long) {
+        writableDatabase.execSQL("UPDATE achievements SET archived = 1 WHERE id = ?", arrayOf(id))
+    }
+
+    /** Klaim sekali per hari. Mengembalikan true kalau berhasil (belum diklaim hari ini). */
+    fun claimAchievement(id: Long): Boolean {
+        val v = ContentValues().apply {
+            put("ach_id", id)
+            put("day", dayKey())
+        }
+        return writableDatabase.insertWithOnConflict("achievement_log", null, v, SQLiteDatabase.CONFLICT_IGNORE) != -1L
     }
 
     private fun purgeOld() {

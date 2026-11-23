@@ -12,7 +12,7 @@ import kotlin.random.Random
  * Yang dikirim ke AI hanya konteks ringkas (jam, mood, jumlah rutinitas/urgent), bukan isi notifikasi.
  */
 object LineBank {
-    val CATEGORIES = listOf("normal", "happy", "surprised", "angry", "cry", "sleepy", "pat", "feed", "habit", "allhabits")
+    val CATEGORIES = listOf("normal", "happy", "surprised", "angry", "cry", "sleepy", "pat", "feed", "habit", "allhabits", "achievement")
 
     private val FALLBACK = mapOf(
         "normal" to listOf("Hm? Ada apa colek-colek?", "Aku lagi jagain notifikasimu loh.", "Hai! Udah minum air belum?"),
@@ -25,6 +25,7 @@ object LineBank {
         "feed" to listOf("Nyam! Enak banget!", "Camilan! Kamu yang terbaik!", "Kenyang… makasih ya~"),
         "habit" to listOf("Keren! Satu rutinitas beres!", "Mantap, pertahankan ya!", "Aku bangga sama kamu!"),
         "allhabits" to listOf("SEMUA BERES! Kamu hebat banget hari ini!", "Rutinitas lengkap! Waktunya santai~"),
+        "achievement" to listOf("Waaah, pencapaian baru! Aku makin sayang kamu!", "Kamu keren banget hari ini, sumpah!", "Bangga banget sama kamu! Peluk dulu sini!"),
     )
 
     @Volatile
@@ -73,8 +74,9 @@ object LineBank {
                     Buat 6 kalimat untuk setiap kategori:
                     normal (maskot dicolek biasa), happy (senang), surprised (kaget), angry (ngambek lucu karena dicolek terus atau ada notif urgent),
                     cry (sedih/manja minta diperhatikan), sleepy (ngantuk), pat (sedang dielus), feed (dikasih camilan),
-                    habit (memuji pengguna yang baru menyelesaikan satu rutinitas), allhabits (merayakan semua rutinitas hari ini selesai).
-                    Balas JSON: {"normal":[...],"happy":[...],"surprised":[...],"angry":[...],"cry":[...],"sleepy":[...],"pat":[...],"feed":[...],"habit":[...],"allhabits":[...]}
+                    habit (memuji pengguna yang baru menyelesaikan satu rutinitas), allhabits (merayakan semua rutinitas hari ini selesai),
+                    achievement (sangat bangga dan makin sayang karena pengguna meraih pencapaian penting, misalnya selesai magang hari itu atau menyelesaikan konten).
+                    Balas JSON: {"normal":[...],"happy":[...],"surprised":[...],"angry":[...],"cry":[...],"sleepy":[...],"pat":[...],"feed":[...],"habit":[...],"allhabits":[...],"achievement":[...]}
                 """.trimIndent()
                 val text = GeminiClient.generate(prefs.apiKey, prefs.model, system, user, json = true)
                 val start = text.indexOf('{')

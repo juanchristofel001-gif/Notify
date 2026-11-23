@@ -40,6 +40,17 @@ class HabitActivity : AppCompatActivity() {
     private lateinit var habitBar: LinearProgressIndicator
     private lateinit var habitEmpty: TextView
     private val adapter = HabitAdapter(::toggle, ::confirmDelete)
+    private val achAdapter = AchievementAdapter(::claim, ::confirmDeleteAch)
+    private lateinit var achEmpty: TextView
+
+    private val achPresets = listOf(
+        Triple("💼", "Selesai magang hari ini", 15),
+        Triple("🎬", "Bikin konten Rispar", 20),
+        Triple("📄", "Kirim lamaran kerja", 20),
+        Triple("📚", "Selesaikan tugas kuliah", 15),
+        Triple("✍️", "Progres paper / jurnal", 20),
+        Triple("🏋️", "Latihan gym full", 10),
+    )
 
     private val presets = listOf(
         "💧" to "Minum air 8 gelas", "🏃" to "Olahraga 20 menit", "📖" to "Baca 10 halaman",
@@ -63,6 +74,12 @@ class HabitActivity : AppCompatActivity() {
         habitTitle = findViewById(R.id.habit_title)
         habitBar = findViewById(R.id.habit_bar)
         habitEmpty = findViewById(R.id.habit_empty)
+        achEmpty = findViewById(R.id.ach_empty)
+        val achList = findViewById<RecyclerView>(R.id.achievements)
+        achList.layoutManager = LinearLayoutManager(this)
+        achList.adapter = achAdapter
+        achList.itemAnimator = DefaultItemAnimator().apply { supportsChangeAnimations = false }
+        findViewById<View>(R.id.btn_add_ach).setOnClickListener { showAddAchievement() }
 
         val mascot = findViewById<View>(R.id.mascot)
         face = MascotFace(findViewById(R.id.mascot_a), findViewById(R.id.mascot_b))
@@ -103,8 +120,11 @@ class HabitActivity : AppCompatActivity() {
     private fun refresh() {
         io.execute {
             val habits = db.habits()
+            val achs = db.achievements()
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
+                achAdapter.submit(achs)
+                achEmpty.visibility = if (achs.isEmpty()) View.VISIBLE else View.GONE
                 adapter.submit(habits)
                 val done = habits.count { it.doneToday }
                 habitTitle.text = if (habits.isEmpty()) "Rutinitas hari ini" else "Rutinitas hari ini  $done/${habits.size}"
@@ -117,10 +137,10 @@ class HabitActivity : AppCompatActivity() {
 
     private fun updateStats() {
         val mood = Pet.mood(this)
-        levelView.text = "Level kedekatan ${Pet.level(this)}"
+        levelView.text = "💗 Afeksi Lv. ${Pet.level(this)}"
         moodLabel.text = "Mood: ${Pet.moodLabel(mood)} ($mood/100)"
         moodBar.setProgressCompat(mood, true)
-        xpLabel.text = "XP ${Pet.levelProgress(this)}/100 menuju level berikutnya"
+        xpLabel.text = "Afeksi ${Pet.levelProgress(this)}/100 menuju level berikutnya (naik dari pencapaian)"
         xpBar.setProgressCompat(Pet.levelProgress(this), true)
         face.setBase(
             when {
@@ -186,6 +206,99 @@ class HabitActivity : AppCompatActivity() {
                 refresh()
             }
         }
+    }
+
+    // ---------- Pencapaian ----------
+
+    private fun claim(a: Achievement) {
+        io.execute {
+            val ok = db.claimAchievement(a.id)
+            val levelBefore = Pet.level(this)
+            if (ok) Pet.addAffection(this, a.points)
+            val levelAfter = Pet.level(this)
+            runOnUiThread {
+                if (!ok) {
+                    say("Yang ini udah diklaim hari ini~ besok lagi ya!")
+                    return@runOnUiThread
+                }
+                motion.react(strong = true)
+                face.flash(R.drawable.mascot_surprised, 900)
+                stage.postDelayed({ face.flash(R.drawable.mascot_happy, 2600) }, 900)
+                repeat(8) { i -> stage.postDelayed({ spawnFloat(listOf("💗", "🏆", "✨", "🎉").random()) }, i * 90L) }
+                if (levelAfter > levelBefore) {
+                    say("AFEKSI NAIK KE LEVEL $levelAfter! ${LineBank.next(this, "achievement")}")
+                } else {
+                    say("+${a.points} afeksi! ${LineBank.next(this, "achievement")}")
+                }
+                refresh()
+            }
+        }
+    }
+
+    private fun confirmDeleteAch(a: Achievement) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Hapus pencapaian?")
+            .setMessage("${a.emoji} ${a.name} akan dihapus dari daftar. Afeksi yang sudah didapat tetap ada.")
+            .setPositiveButton("Hapus") { _, _ ->
+                io.execute {
+                    db.archiveAchievement(a.id)
+                    runOnUiThread { refresh() }
+                }
+            }
+            .setNegativeButton("Batal", null)
+            .show()
+    }
+
+    private fun showAddAchievement() {
+        val view = layoutInflater.inflate(R.layout.dialog_achievement, null)
+        val emoji = view.findViewById<EditText>(R.id.in_emoji)
+        val name = view.findViewById<EditText>(R.id.in_name)
+        val presetsGroup = view.findViewById<ChipGroup>(R.id.presets)
+        val pointsGroup = view.findViewById<ChipGroup>(R.id.points)
+        val pointChips = LinkedHashMap<Int, Chip>()
+        listOf(5, 10, 15, 20, 30, 50).forEach { pts ->
+            val chip = Chip(this)
+            chip.id = View.generateViewId()
+            chip.text = "+$pts"
+            chip.isCheckable = true
+            pointsGroup.addView(chip)
+            pointChips[pts] = chip
+        }
+        pointChips[15]?.isChecked = true
+        achPresets.forEach { (e, n, pts) ->
+            val chip = Chip(this)
+            chip.text = "$e $n"
+            chip.setOnClickListener {
+                emoji.setText(e)
+                name.setText(n)
+                name.setSelection(n.length)
+                pointChips[pts]?.isChecked = true
+            }
+            presetsGroup.addView(chip)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Pencapaian baru")
+            .setView(view)
+            .setPositiveButton("Tambah") { _, _ ->
+                val n = name.text.toString().trim()
+                val e = emoji.text.toString().trim().ifEmpty { "🏆" }
+                val pts = pointChips.entries.firstOrNull { it.value.isChecked }?.key ?: 15
+                if (n.isEmpty()) {
+                    Toast.makeText(this, "Nama pencapaian belum diisi", Toast.LENGTH_SHORT).show()
+                } else {
+                    io.execute {
+                        db.addAchievement(n, e, pts)
+                        runOnUiThread {
+                            face.flash(R.drawable.mascot_happy, 1500)
+                            motion.react()
+                            say("Oke! Kalau \"$n\" kesampaian, kabarin aku ya!")
+                            refresh()
+                        }
+                    }
+                }
+            }
+            .setNegativeButton("Batal", null)
+            .show()
     }
 
     private fun confirmDelete(h: Habit) {
@@ -265,6 +378,49 @@ class HabitActivity : AppCompatActivity() {
     }
 
     // ---------- Adapter ----------
+
+    private class AchievementAdapter(
+        val onClaim: (Achievement) -> Unit,
+        val onLong: (Achievement) -> Unit,
+    ) : RecyclerView.Adapter<AchievementAdapter.VH>() {
+        private var items: List<Achievement> = emptyList()
+
+        fun submit(list: List<Achievement>) {
+            val old = items
+            items = list
+            if (old.size == list.size && old.map { it.id } == list.map { it.id }) {
+                list.forEachIndexed { i, a -> if (a != old[i]) notifyItemChanged(i) }
+            } else {
+                notifyDataSetChanged()
+            }
+        }
+
+        class VH(v: View) : RecyclerView.ViewHolder(v) {
+            val emoji: TextView = v.findViewById(R.id.emoji)
+            val name: TextView = v.findViewById(R.id.name)
+            val info: TextView = v.findViewById(R.id.info)
+            val claim: com.google.android.material.button.MaterialButton = v.findViewById(R.id.claim)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
+            VH(LayoutInflater.from(parent.context).inflate(R.layout.item_achievement, parent, false))
+
+        override fun getItemCount() = items.size
+
+        override fun onBindViewHolder(h: VH, position: Int) {
+            val a = items[position]
+            h.emoji.text = a.emoji
+            h.name.text = a.name
+            h.info.text = "+${a.points} afeksi" + if (a.timesClaimed > 0) " · tercapai ${a.timesClaimed}×" else ""
+            h.claim.isEnabled = !a.claimedToday
+            h.claim.text = if (a.claimedToday) "✓ Hari ini" else "Klaim"
+            h.claim.setOnClickListener { onClaim(a) }
+            h.itemView.setOnLongClickListener {
+                onLong(a)
+                true
+            }
+        }
+    }
 
     private class HabitAdapter(
         val onToggle: (Habit) -> Unit,

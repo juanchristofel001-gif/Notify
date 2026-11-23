@@ -2,7 +2,11 @@ package com.geto.notifhub
 
 import android.content.Context
 
-/** Status maskot: mood (0–100, turun pelan seiring waktu) dan XP kedekatan. */
+/**
+ * Status maskot:
+ * - mood (0–100): naik saat dielus/dikasih camilan/rutinitas selesai, turun pelan seiring waktu
+ * - afeksi (XP → level): HANYA naik dari pencapaian yang diklaim
+ */
 object Pet {
     private const val DECAY_PER_HOUR = 2.5f
     private const val PAT_COOLDOWN_MS = 6_000L
@@ -30,6 +34,8 @@ object Pet {
     fun level(ctx: Context): Int = xp(ctx) / 100 + 1
     fun levelProgress(ctx: Context): Int = xp(ctx) % 100
 
+    fun addAffection(ctx: Context, n: Int) = addXp(ctx, n)
+
     private fun addXp(ctx: Context, n: Int) {
         sp(ctx).edit().putInt("xp", (xp(ctx) + n).coerceAtLeast(0)).apply()
     }
@@ -41,7 +47,6 @@ object Pet {
         if (now - s.getLong("last_pat", 0L) < PAT_COOLDOWN_MS) return false
         s.edit().putLong("last_pat", now).apply()
         changeMood(ctx, 4)
-        addXp(ctx, 2)
         return true
     }
 
@@ -53,13 +58,11 @@ object Pet {
         if (wait > 0) return wait
         s.edit().putLong("last_feed", now).apply()
         changeMood(ctx, 20)
-        addXp(ctx, 10)
         return 0L
     }
 
     fun habitToggled(ctx: Context, done: Boolean) {
         changeMood(ctx, if (done) 12 else -12)
-        addXp(ctx, if (done) 20 else -20)
     }
 
     fun moodLabel(m: Int): String = when {
