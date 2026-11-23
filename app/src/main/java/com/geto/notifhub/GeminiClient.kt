@@ -75,6 +75,23 @@ object GeminiClient {
         return generate(apiKey, model, system, "Percakapan: $convName\n$lines", json = false).trim()
     }
 
+    /** Ringkasan berita dari judul-judul saja (tidak mengambil isi artikel). */
+    fun newsBrief(apiKey: String, model: String, topic: String, items: List<News.Item>): String {
+        val fmt = SimpleDateFormat("dd MMM HH:mm", Locale("id", "ID"))
+        val lines = items.joinToString("\n") { "- [${if (it.time > 0) fmt.format(Date(it.time)) else "?"}] ${it.title} (${it.source})" }
+        val system = """
+            Kamu membantu pengguna memantau berita ekonomi dan keuangan Indonesia.
+            Kamu HANYA menerima judul berita; jangan mengarang isi artikel, angka, atau kutipan yang tidak ada di judul.
+            Tulis dalam bahasa Indonesia, ringkas, tanpa pembuka basa-basi. Format:
+            Inti hari ini:
+            • (3–5 poin: tema utama yang muncul dari judul-judul, gabungkan judul yang membahas hal sama)
+            Yang perlu dipantau:
+            • (1–3 hal yang mungkin berdampak ke keuangan pribadi, mis. suku bunga, kurs, harga; tulis "—" jika tidak ada)
+            Catatan: ringkasan ini dari judul saja, baca artikel aslinya untuk detail.
+        """.trimIndent()
+        return generate(apiKey, model, system, "Topik: $topic\nJudul berita:\n$lines", json = false).trim()
+    }
+
     /** Dipakai tombol "Tes koneksi". */
     fun test(apiKey: String, model: String): String =
         generate(apiKey, model, "Jawab sangat singkat.", "Balas dengan kata: OK", json = false)

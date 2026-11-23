@@ -46,6 +46,16 @@ data class Habit(
     val streak: Int,
 )
 
+data class PersonalDate(
+    val id: Long,
+    val name: String,
+    val emoji: String,
+    val year: Int,
+    val month: Int,
+    val day: Int,
+    val yearly: Boolean,
+)
+
 data class Achievement(
     val id: Long,
     val name: String,
@@ -55,7 +65,7 @@ data class Achievement(
     val claimedToday: Boolean,
 )
 
-class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db", null, 6) {
+class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db", null, 7) {
 
     private val appCtx: Context = ctx.applicationContext
 
@@ -102,6 +112,21 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
         db.execSQL("CREATE INDEX idx_prio_ts ON notifs(priority, ts)")
         createHabitTables(db)
         createAchievementTables(db)
+        createDateTable(db)
+    }
+
+    private fun createDateTable(db: SQLiteDatabase) {
+        db.execSQL(
+            """CREATE TABLE IF NOT EXISTS personal_dates(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                emoji TEXT NOT NULL,
+                year INTEGER NOT NULL,
+                month INTEGER NOT NULL,
+                day INTEGER NOT NULL,
+                yearly INTEGER NOT NULL DEFAULT 1
+            )"""
+        )
     }
 
     private fun createAchievementTables(db: SQLiteDatabase) {
@@ -173,6 +198,7 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
                 }
             }
         }
+        if (oldVersion < 7) createDateTable(db)
         if (oldVersion < 6) recategorize(db)   // harus terakhir: butuh kolom thread
     }
 
@@ -450,6 +476,32 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
             put("day", dayKey())
         }
         return writableDatabase.insertWithOnConflict("achievement_log", null, v, SQLiteDatabase.CONFLICT_IGNORE) != -1L
+    }
+
+    // ---------- Tanggal pribadi ----------
+
+    fun personalDates(): List<PersonalDate> =
+        readableDatabase.rawQuery(
+            "SELECT id, name, emoji, year, month, day, yearly FROM personal_dates ORDER BY month, day",
+            emptyArray<String>()
+        ).use { c ->
+            val out = ArrayList<PersonalDate>()
+            while (c.moveToNext()) {
+                out.add(PersonalDate(c.getLong(0), c.getString(1), c.getString(2), c.getInt(3), c.getInt(4), c.getInt(5), c.getInt(6) != 0))
+            }
+            out
+        }
+
+    fun addPersonalDate(name: String, emoji: String, year: Int, month: Int, day: Int, yearly: Boolean) {
+        val v = ContentValues().apply {
+            put("name", name); put("emoji", emoji); put("year", year)
+            put("month", month); put("day", day); put("yearly", if (yearly) 1 else 0)
+        }
+        writableDatabase.insert("personal_dates", null, v)
+    }
+
+    fun deletePersonalDate(id: Long) {
+        writableDatabase.execSQL("DELETE FROM personal_dates WHERE id = ?", arrayOf(id))
     }
 
     private fun purgeOld() {

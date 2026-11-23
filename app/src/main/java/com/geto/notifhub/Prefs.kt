@@ -33,6 +33,30 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("grouped_view", true)
         set(v) = sp.edit().putBoolean("grouped_view", v).apply()
 
+    /** Nama panggilan untuk sapaan di Beranda. */
+    var nickname: String
+        get() = sp.getString("nickname", "").orEmpty().trim()
+        set(v) = sp.edit().putString("nickname", v.trim()).apply()
+
+    /** Kota cadangan untuk cuaca kalau izin lokasi tidak diberikan. */
+    var city: String
+        get() = sp.getString("city", "Serang").orEmpty().trim().ifEmpty { "Serang" }
+        set(v) = sp.edit().putString("city", v.trim()).apply()
+
+    /** Tanggal lahir "yyyy-MM-dd" → (tahun, bulan, hari). */
+    var birthdayRaw: String
+        get() = sp.getString("birthday", "").orEmpty()
+        set(v) = sp.edit().putString("birthday", v).apply()
+
+    val birthday: Triple<Int, Int, Int>?
+        get() = birthdayRaw.split("-").takeIf { it.size == 3 }
+            ?.mapNotNull { it.toIntOrNull() }?.takeIf { it.size == 3 }
+            ?.let { Triple(it[0], it[1], it[2]) }
+
+    var pinnedApps: List<String>
+        get() = sp.getString("pinned_apps", "").orEmpty().split(',').filter { it.isNotBlank() }
+        set(v) = sp.edit().putString("pinned_apps", v.joinToString(",")).apply()
+
     var alertUrgent: Boolean
         get() = sp.getBoolean("alert_urgent", true)
         set(v) = sp.edit().putBoolean("alert_urgent", v).apply()

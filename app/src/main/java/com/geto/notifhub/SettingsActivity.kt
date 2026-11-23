@@ -20,6 +20,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var swAll: SwitchCompat
     private lateinit var swAlert: SwitchCompat
     private lateinit var status: TextView
+    private lateinit var nickname: EditText
+    private lateinit var city: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,6 +37,25 @@ class SettingsActivity : AppCompatActivity() {
         swAll = findViewById(R.id.sw_all)
         swAlert = findViewById(R.id.sw_alert)
         status = findViewById(R.id.status)
+        nickname = findViewById(R.id.nickname)
+        city = findViewById(R.id.city)
+        nickname.setText(prefs.nickname)
+        city.setText(prefs.city)
+        val bdayBtn = findViewById<Button>(R.id.btn_birthday)
+        fun showBday() {
+            bdayBtn.text = prefs.birthday?.let { (y, m, d) ->
+                val c = java.util.Calendar.getInstance().apply { set(y, m - 1, d) }
+                "🎂 Tanggal lahir: " + java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale("id", "ID")).format(c.time)
+            } ?: "🎂 Atur tanggal lahir"
+        }
+        showBday()
+        bdayBtn.setOnClickListener {
+            val (y, m, d) = prefs.birthday ?: Triple(2005, 1, 1)
+            android.app.DatePickerDialog(this, { _, yy, mm, dd ->
+                prefs.birthdayRaw = String.format(java.util.Locale.US, "%04d-%02d-%02d", yy, mm + 1, dd)
+                showBday()
+            }, y, m - 1, d).show()
+        }
 
         apiKey.setText(prefs.apiKey)
         model.setText(prefs.model)
@@ -67,6 +88,8 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun save() {
+        prefs.nickname = nickname.text.toString()
+        prefs.city = city.text.toString()
         prefs.apiKey = apiKey.text.toString()
         prefs.model = model.text.toString()
         prefs.aboutMe = about.text.toString()
