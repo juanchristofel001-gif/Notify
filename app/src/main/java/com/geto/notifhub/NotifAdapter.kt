@@ -59,6 +59,7 @@ class NotifAdapter(
         val body: TextView = v.findViewById(R.id.body)
         val pill: TextView = v.findViewById(R.id.pill)
         val reason: TextView = v.findViewById(R.id.reason)
+        var boundId = -1L
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH =
@@ -106,7 +107,14 @@ class NotifAdapter(
             else -> item.reason
         }
 
-        h.itemView.alpha = if (item.read) 0.55f else 1f
+        val targetAlpha = if (item.read) 0.55f else 1f
+        if (h.boundId == item.id && h.itemView.alpha != targetAlpha) {
+            h.itemView.animate().alpha(targetAlpha).setDuration(250).start()
+        } else {
+            h.itemView.animate().cancel()
+            h.itemView.alpha = targetAlpha
+        }
+        h.boundId = item.id
         h.itemView.setOnClickListener { onClick(item) }
         h.itemView.setOnLongClickListener {
             onLongClick(item)

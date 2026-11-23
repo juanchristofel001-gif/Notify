@@ -10,5 +10,12 @@
         <item name="android:statusBarColor">@color/header_start</item>
         <item name="android:navigationBarColor">@color/bg</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowAnimationStyle">@style/Anim.NotifHub</item>
+    </style>
+    <style name="Anim.NotifHub" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/slide_in_right</item>
+        <item name="android:activityOpenExitAnimation">@anim/hold_dim</item>
+        <item name="android:activityCloseEnterAnimation">@anim/hold_undim</item>
+        <item name="android:activityCloseExitAnimation">@anim/slide_out_right</item>
     </style>
 </resources>

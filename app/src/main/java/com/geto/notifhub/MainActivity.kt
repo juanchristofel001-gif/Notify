@@ -6,7 +6,13 @@ import android.app.ActivityOptions
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
@@ -18,9 +24,11 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
+import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -46,6 +54,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bubble: TextView
     private lateinit var mascot: ImageView
 
+    private val ui = Handler(Looper.getMainLooper())
+    private val debouncedRefresh = Runnable { refresh() }
     private var filter: String? = null
     private var category: String? = null
     private val chipByFilter = LinkedHashMap<String?, Chip>()
@@ -86,6 +96,19 @@ class MainActivity : AppCompatActivity() {
         adapter = NotifAdapter(::open, ::changePriority)
         list.layoutManager = LinearLayoutManager(this)
         list.adapter = adapter
+        list.itemAnimator = DefaultItemAnimator().apply {
+            supportsChangeAnimations = false      // tidak berkedip saat isi kartu berubah
+            addDuration = 260
+            removeDuration = 200
+            moveDuration = 280
+        }
+        // Header menggulung pelan: konten header memudar saat discroll
+        val header = findViewById<View>(R.id.header)
+        findViewById<AppBarLayout>(R.id.appbar).addOnOffsetChangedListener { bar, offset ->
+            val range = bar.totalScrollRange.coerceAtLeast(1)
+            val p = (-offset).toFloat() / range
+            header.alpha = 1f - 0.5f * p
+        }
         attachSwipe()
         buildCategoryChips()
         buildChips()
@@ -121,7 +144,10 @@ class MainActivity : AppCompatActivity() {
         hasAccess = NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
         banner.visibility = if (hasAccess) View.GONE else View.VISIBLE
         greeting.text = greetingText()
-        Bus.listener = { refresh() }
+        Bus.listener = {
+            ui.removeCallbacks(debouncedRefresh)
+            ui.postDelayed(debouncedRefresh, 150)
+        }
         mascotCtl.start()
         refresh()
         Classifier.schedule(this, 0)
@@ -158,6 +184,45 @@ class MainActivity : AppCompatActivity() {
                 updateCategoryChips(byCat, total.values.sum())
                 updateHeader(total)
                 updateError()
+            }
+        }
+    }
+
+    /** Ganti isi list dengan fade halus, tanpa kedip kosong. */
+    private fun switchList() {
+        val f = filter
+        val cat = category
+        val dp = resources.displayMetrics.density
+        list.animate().cancel()
+        list.animate().alpha(0f).translationY(8 * dp).setDuration(110).withEndAction {
+            io.execute {
+                val items = db.query(cat, f)
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    list.itemAnimator?.endAnimations()
+                    adapter.submitList(items) {
+                        list.scrollToPosition(0)
+                        list.animate().alpha(1f).translationY(0f).setDuration(240)
+                            .setInterpolator(DecelerateInterpolator()).start()
+                    }
+                    showEmpty(items.isEmpty())
+                }
+            }
+        }.start()
+        refreshCountsOnly()
+    }
+
+    private fun refreshCountsOnly() {
+        val cat = category
+        io.execute {
+            val counts = db.unreadCounts(cat)
+            val total = db.unreadCounts(null)
+            val byCat = db.unreadByCategory()
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                updateChips(counts)
+                updateCategoryChips(byCat, total.values.sum())
+                updateHeader(total)
             }
         }
     }
@@ -274,8 +339,7 @@ class MainActivity : AppCompatActivity() {
             val newFilter = chipByFilter.entries.firstOrNull { it.value === checked }?.key
             if (newFilter != filter) {
                 filter = newFilter
-                adapter.submitList(null)
-                refresh(animateList = true)
+                switchList()
             }
         }
     }
@@ -295,8 +359,7 @@ class MainActivity : AppCompatActivity() {
             val newCat = chipByCategory.entries.firstOrNull { it.value === checked }?.key
             if (newCat != category) {
                 category = newCat
-                adapter.submitList(null)
-                refresh(animateList = true)
+                switchList()
             }
         }
     }
@@ -337,7 +400,44 @@ class MainActivity : AppCompatActivity() {
     // ---------- Aksi kartu ----------
 
     private fun attachSwipe() {
+        val dp = resources.displayMetrics.density
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = getColor(R.color.accent) }
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 14 * dp
+            isFakeBoldText = true
+        }
+        val box = RectF()
         val cb = object : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT) {
+            override fun getSwipeThreshold(vh: RecyclerView.ViewHolder): Float = 0.35f
+
+            override fun onChildDraw(
+                c: Canvas, rv: RecyclerView, vh: RecyclerView.ViewHolder,
+                dX: Float, dY: Float, actionState: Int, isActive: Boolean,
+            ) {
+                val v = vh.itemView
+                if (dX != 0f) {
+                    val prog = (kotlin.math.abs(dX) / v.width).coerceIn(0f, 1f)
+                    box.set(v.left + 4 * dp, v.top + 5 * dp, v.right - 4 * dp, v.bottom - 5 * dp)
+                    bgPaint.alpha = (255 * (0.35f + 0.65f * (prog / 0.35f).coerceAtMost(1f))).toInt()
+                    c.drawRoundRect(box, 20 * dp, 20 * dp, bgPaint)
+                    val label = "✓ Dibaca"
+                    val tw = textPaint.measureText(label)
+                    val ty = box.centerY() + textPaint.textSize / 3f
+                    val tx = if (dX > 0) box.left + 20 * dp else box.right - 20 * dp - tw
+                    textPaint.alpha = (255 * (prog / 0.25f).coerceAtMost(1f)).toInt()
+                    c.drawText(label, tx, ty, textPaint)
+                    v.alpha = 1f - 0.3f * prog
+                }
+                super.onChildDraw(c, rv, vh, dX, dY, actionState, isActive)
+            }
+
+            override fun clearView(rv: RecyclerView, vh: RecyclerView.ViewHolder) {
+                super.clearView(rv, vh)
+                val item = adapter.itemAt(vh.bindingAdapterPosition)
+                vh.itemView.alpha = if (item?.read == true) 0.55f else 1f
+            }
+
             override fun onMove(
                 rv: RecyclerView, vh: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder,
             ): Boolean = false
