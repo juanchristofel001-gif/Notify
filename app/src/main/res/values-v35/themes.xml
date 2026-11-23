@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 15: matikan tampilan edge-to-edge paksa supaya bilah judul
+         tidak menutupi banner dan tab. (Hanya berlaku selama targetSdk = 35.) -->
+    <style name="Theme.NotifHub" parent="Theme.Material3.DayNight">
+        <item name="colorPrimary">@color/brand</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+</resources>
