@@ -1,7 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/header_start"
+        app:navigationIcon="@drawable/ic_back"
+        app:title="Pengaturan"
+        app:titleTextColor="#FFFFFF" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -9,97 +25,126 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_access"
+            style="@style/Widget.Material3.Button.TonalButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Buka izin akses notifikasi" />
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Gemini API key (buat di Google AI Studio)"
-            android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/api_key"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="AIza..."
-            android:inputType="textPassword"
-            android:importantForAutofill="no" />
-
-        <TextView
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="Model"
-            android:textStyle="bold" />
+            android:hint="Gemini API key (dari Google AI Studio)"
+            app:boxCornerRadiusBottomEnd="14dp"
+            app:boxCornerRadiusBottomStart="14dp"
+            app:boxCornerRadiusTopEnd="14dp"
+            app:boxCornerRadiusTopStart="14dp"
+            app:endIconMode="password_toggle">
 
-        <EditText
-            android:id="@+id/model"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="text"
-            android:importantForAutofill="no" />
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/api_key"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="top"
+                android:importantForAutofill="no"
+                android:inputType="textPassword"
+                android:minLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="Tentang aku (apa yang penting buatku)"
-            android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/about"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="top"
-            android:hint="Contoh: lagi magang di OJK, cari kerja mulai Oktober, email rekrutmen &amp; dosen penting, grup angkatan tidak penting"
-            android:inputType="textMultiLine|textCapSentences"
-            android:minLines="3"
-            android:importantForAutofill="no" />
-
-        <TextView
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="Kontak / pengirim VIP (pisahkan dengan koma)"
-            android:textStyle="bold" />
+            android:hint="Model"
+            app:boxCornerRadiusBottomEnd="14dp"
+            app:boxCornerRadiusBottomStart="14dp"
+            app:boxCornerRadiusTopEnd="14dp"
+            app:boxCornerRadiusTopStart="14dp">
 
-        <EditText
-            android:id="@+id/vip"
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/model"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="top"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:minLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Mama, Papa, Bu Eneng, HRD"
-            android:inputType="textMultiLine"
-            android:minLines="2"
-            android:importantForAutofill="no" />
+            android:layout_marginTop="12dp"
+            android:hint="Tentang aku (apa yang penting buatku)"
+            app:boxCornerRadiusBottomEnd="14dp"
+            app:boxCornerRadiusBottomStart="14dp"
+            app:boxCornerRadiusTopEnd="14dp"
+            app:boxCornerRadiusTopStart="14dp"
+            app:helperText="Contoh: lagi magang di OJK, cari kerja mulai Oktober, email rekrutmen &amp; dosen penting, grup angkatan tidak penting">
 
-        <androidx.appcompat.widget.SwitchCompat
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/about"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="top"
+                android:importantForAutofill="no"
+                android:inputType="textMultiLine|textCapSentences"
+                android:minLines="3" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:hint="Kontak / pengirim VIP (pisahkan dengan koma)"
+            app:boxCornerRadiusBottomEnd="14dp"
+            app:boxCornerRadiusBottomStart="14dp"
+            app:boxCornerRadiusTopEnd="14dp"
+            app:boxCornerRadiusTopStart="14dp"
+            app:helperText="Mama, Papa, Bu Eneng, HRD">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/vip"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="top"
+                android:importantForAutofill="no"
+                android:inputType="textMultiLine"
+                android:minLines="2" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.materialswitch.MaterialSwitch
             android:id="@+id/sw_all"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Tangkap notifikasi dari semua aplikasi (matikan untuk hanya WA, Facebook, Messenger, dan email)" />
+            android:text="Tangkap notifikasi dari semua aplikasi (matikan untuk hanya WA, Facebook, Messenger, dan email)"
+            android:textColor="@color/text_primary" />
 
-        <androidx.appcompat.widget.SwitchCompat
+        <com.google.android.material.materialswitch.MaterialSwitch
             android:id="@+id/sw_alert"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Beri peringatan khusus untuk notifikasi URGENT" />
+            android:text="Beri peringatan khusus untuk notifikasi URGENT"
+            android:textColor="@color/text_primary" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_save"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
             android:text="Simpan" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_test"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Tes koneksi Gemini" />
@@ -109,6 +154,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
+            android:textColor="@color/text_primary"
             android:textIsSelectable="true" />
 
         <TextView
@@ -116,7 +162,8 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:text="Catatan privasi: isi notifikasi (termasuk kode OTP) dikirim ke Google Gemini untuk dipilah. Tanpa API key, aplikasi memakai aturan kata kunci sederhana dan tidak mengirim apa pun."
-            android:textColor="?android:attr/textColorSecondary"
+            android:textColor="@color/text_secondary"
             android:textSize="12sp" />
     </LinearLayout>
-</ScrollView>
+    </ScrollView>
+</LinearLayout>

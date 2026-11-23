@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.NotifHub" parent="Theme.Material3.DayNight">
-        <item name="colorPrimary">@color/brand</item>
+    <style name="Theme.NotifHub" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">@color/chip_selected</item>
+        <item name="colorOnSecondaryContainer">@color/text_primary</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="android:statusBarColor">@color/header_start</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

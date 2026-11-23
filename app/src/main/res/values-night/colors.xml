@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="header_start">#C2416B</color>
+    <color name="header_end">#5B43C4</color>
+    <color name="bg">#111117</color>
+    <color name="surface">#1C1C25</color>
+    <color name="text_primary">#F2F2F7</color>
+    <color name="text_secondary">#9A9AAB</color>
+    <color name="chip_selected">#4A2433</color>
+</resources>
