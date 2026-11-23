@@ -53,16 +53,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var sub: TextView
     private lateinit var bubble: TextView
     private lateinit var mascot: View
-    private lateinit var faceA: ImageView
-    private lateinit var faceB: ImageView
-    private var frontIsA = true
-    private var currentFace = 0
-    private var baseFace = R.drawable.mascot_normal
-    private var flashing = false
-    private val restoreFace = Runnable {
-        flashing = false
-        showFace(baseFace)
-    }
+    private lateinit var face: MascotFace
+    private lateinit var careBtn: com.google.android.material.button.MaterialButton
 
     private val ui = Handler(Looper.getMainLooper())
     private val debouncedRefresh = Runnable { refresh() }
@@ -102,9 +94,9 @@ class MainActivity : AppCompatActivity() {
         sub = findViewById(R.id.sub)
         bubble = findViewById(R.id.bubble)
         mascot = findViewById(R.id.mascot)
-        faceA = findViewById(R.id.mascot_a)
-        faceB = findViewById(R.id.mascot_b)
-        currentFace = R.drawable.mascot_normal
+        face = MascotFace(findViewById(R.id.mascot_a), findViewById(R.id.mascot_b))
+        careBtn = findViewById(R.id.btn_care)
+        careBtn.setOnClickListener { startActivity(Intent(this, HabitActivity::class.java)) }
 
         adapter = NotifAdapter(::open, ::changePriority)
         list.layoutManager = LinearLayoutManager(this)
@@ -136,9 +128,9 @@ class MainActivity : AppCompatActivity() {
         }
         mascot.setOnClickListener {
             mascotCtl.react()
-            flashFace(R.drawable.mascot_happy, 1800)
-            idleIdx++
-            updateBubble(force = true)
+            val picked = face.flashRandom(2200)
+            Pet.pat(this)
+            showLine(LineBank.next(this, MascotFace.category(picked)))
         }
 
         greeting.text = greetingText()
@@ -165,6 +157,8 @@ class MainActivity : AppCompatActivity() {
         mascotCtl.start()
         refresh()
         Classifier.schedule(this, 0)
+        LineBank.refill(this)
+        updateCareButton()
     }
 
     override fun onPause() {
@@ -175,6 +169,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         ui.removeCallbacksAndMessages(null)
+        face.release()
         countAnim?.cancel()
         super.onDestroy()
     }
@@ -270,10 +265,11 @@ class MainActivity : AppCompatActivity() {
 
         if (lastUrgent >= 0 && urgent > lastUrgent) {
             mascotCtl.react(strong = true)
-            flashFace(R.drawable.mascot_surprised, 2600)
+            face.flash(R.drawable.mascot_surprised, 2600)
         }
         lastUrgent = urgent
-        setBaseFace(faceFor(counts))
+        face.setBase(faceFor(counts))
+        updateCareButton()
         updateBubble(force = false)
     }
 
@@ -305,41 +301,36 @@ class MainActivity : AppCompatActivity() {
             !hasAccess -> R.drawable.mascot_cry
             Classifier.lastError != null && Prefs(this).apiKey.isNotEmpty() -> R.drawable.mascot_cry
             (counts[Priority.URGENT] ?: 0) > 0 -> R.drawable.mascot_angry
+            Pet.mood(this) < 15 -> R.drawable.mascot_cry
             unread == 0 && (hour >= 22 || hour < 5) -> R.drawable.mascot_sleepy
             unread == 0 -> R.drawable.mascot_happy
             else -> R.drawable.mascot_normal
         }
     }
 
-    private fun setBaseFace(res: Int) {
-        baseFace = res
-        if (!flashing) showFace(res)
+    /** Kalimat dari maskot; tetap tampil beberapa detik sebelum pesan status kembali. */
+    private var lineUntil = 0L
+
+    private fun showLine(text: String) {
+        lineUntil = System.currentTimeMillis() + 4500
+        bubble.animate().cancel()
+        bubble.animate().alpha(0f).translationY(6f).setStartDelay(0).setDuration(110).withEndAction {
+            bubble.text = text
+            bubble.animate().alpha(1f).translationY(0f).setDuration(220)
+                .setInterpolator(DecelerateInterpolator()).start()
+        }.start()
     }
 
-    /** Ekspresi sementara, lalu kembali ke ekspresi dasar. */
-    private fun flashFace(res: Int, ms: Long) {
-        ui.removeCallbacks(restoreFace)
-        flashing = true
-        showFace(res)
-        ui.postDelayed(restoreFace, ms)
-    }
-
-    /** Crossfade ke ekspresi baru dengan efek "pop" kecil. */
-    private fun showFace(res: Int) {
-        if (res == currentFace) return
-        currentFace = res
-        val front = if (frontIsA) faceA else faceB
-        val back = if (frontIsA) faceB else faceA
-        front.animate().cancel()
-        back.animate().cancel()
-        back.setImageResource(res)
-        back.alpha = 0f
-        back.scaleX = 0.9f
-        back.scaleY = 0.9f
-        back.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(320)
-            .setInterpolator(OvershootInterpolator(2f)).start()
-        front.animate().alpha(0f).scaleX(1.05f).scaleY(1.05f).setDuration(220).start()
-        frontIsA = !frontIsA
+    private fun updateCareButton() {
+        io.execute {
+            val (done, total) = db.habitProgress()
+            val mood = Pet.mood(this)
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                val heart = if (mood < 30) "💔" else "💗"
+                careBtn.text = if (total > 0) "$heart Rawat · $done/$total rutinitas" else "$heart Rawat & Rutinitas"
+            }
+        }
     }
 
     private fun bubbleMessage(): String {
@@ -351,11 +342,13 @@ class MainActivity : AppCompatActivity() {
                 "Gemini lagi error, sementara aku pakai aturan dulu."
             urgent > 0 -> "Ada $urgent yang urgent, cek sekarang ya!"
             penting > 0 -> "$penting pesan penting nunggu dibalas."
+            Pet.mood(this) < 15 -> "Aku kangen… rawat aku sebentar dong."
             else -> idleLines[idleIdx % idleLines.size]
         }
     }
 
     private fun updateBubble(force: Boolean) {
+        if (System.currentTimeMillis() < lineUntil) return
         val msg = bubbleMessage()
         if (!force && bubble.text.toString() == msg) return
         bubble.animate().cancel()

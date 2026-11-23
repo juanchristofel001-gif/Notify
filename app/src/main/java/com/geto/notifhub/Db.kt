@@ -37,7 +37,15 @@ data class NotifItem(
     val isMessage: Boolean,
 )
 
-class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db", null, 2) {
+data class Habit(
+    val id: Long,
+    val name: String,
+    val emoji: String,
+    val doneToday: Boolean,
+    val streak: Int,
+)
+
+class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db", null, 3) {
 
     companion object {
         @Volatile
@@ -74,6 +82,26 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
         )
         db.execSQL("CREATE INDEX idx_hash ON notifs(hash)")
         db.execSQL("CREATE INDEX idx_prio_ts ON notifs(priority, ts)")
+        createHabitTables(db)
+    }
+
+    private fun createHabitTables(db: SQLiteDatabase) {
+        db.execSQL(
+            """CREATE TABLE IF NOT EXISTS habits(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                emoji TEXT NOT NULL,
+                created INTEGER NOT NULL,
+                archived INTEGER NOT NULL DEFAULT 0
+            )"""
+        )
+        db.execSQL(
+            """CREATE TABLE IF NOT EXISTS habit_log(
+                habit_id INTEGER NOT NULL,
+                day TEXT NOT NULL,
+                PRIMARY KEY(habit_id, day)
+            )"""
+        )
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -91,6 +119,7 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
             db.execSQL("UPDATE notifs SET is_group = 1 WHERE category = 'komunikasi' AND title LIKE '% — %'")
             db.execSQL("UPDATE notifs SET is_message = 1 WHERE hash LIKE 'm|%'")
         }
+        if (oldVersion < 3) createHabitTables(db)
     }
 
     private fun Cursor.toItem() = NotifItem(
@@ -221,6 +250,79 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
             put("source", "")
         }
         return writableDatabase.update("notifs", v, "source = 'aturan'", null)
+    }
+
+    // ---------- Rutinitas harian ----------
+
+    private fun dayKey(offsetDays: Int = 0): String {
+        val c = java.util.Calendar.getInstance()
+        c.add(java.util.Calendar.DAY_OF_YEAR, offsetDays)
+        return java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(c.time)
+    }
+
+    fun habits(): List<Habit> {
+        val today = dayKey()
+        val out = ArrayList<Habit>()
+        readableDatabase.rawQuery(
+            "SELECT id, name, emoji FROM habits WHERE archived = 0 ORDER BY id ASC", emptyArray<String>()
+        ).use { c ->
+            while (c.moveToNext()) {
+                val id = c.getLong(0)
+                val days = habitDays(id)
+                out.add(Habit(id, c.getString(1), c.getString(2), today in days, streakOf(days)))
+            }
+        }
+        return out
+    }
+
+    private fun habitDays(id: Long): Set<String> =
+        readableDatabase.rawQuery(
+            "SELECT day FROM habit_log WHERE habit_id = ? ORDER BY day DESC LIMIT 400", arrayOf(id.toString())
+        ).use { c ->
+            val s = HashSet<String>()
+            while (c.moveToNext()) s.add(c.getString(0))
+            s
+        }
+
+    /** Hari berturut-turut sampai hari ini (atau kemarin, kalau hari ini belum dicentang). */
+    private fun streakOf(days: Set<String>): Int {
+        var offset = if (dayKey() in days) 0 else -1
+        var n = 0
+        while (dayKey(offset) in days) { n++; offset-- }
+        return n
+    }
+
+    fun addHabit(name: String, emoji: String) {
+        val v = ContentValues().apply {
+            put("name", name)
+            put("emoji", emoji)
+            put("created", System.currentTimeMillis())
+        }
+        writableDatabase.insert("habits", null, v)
+    }
+
+    fun archiveHabit(id: Long) {
+        writableDatabase.execSQL("UPDATE habits SET archived = 1 WHERE id = ?", arrayOf(id))
+    }
+
+    /** Centang / batal centang hari ini. Mengembalikan status baru (true = selesai). */
+    fun toggleHabitToday(id: Long): Boolean {
+        val today = dayKey()
+        val done = readableDatabase.rawQuery(
+            "SELECT 1 FROM habit_log WHERE habit_id = ? AND day = ?", arrayOf(id.toString(), today)
+        ).use { it.moveToFirst() }
+        if (done) {
+            writableDatabase.execSQL("DELETE FROM habit_log WHERE habit_id = ? AND day = ?", arrayOf<Any>(id, today))
+        } else {
+            writableDatabase.execSQL("INSERT OR IGNORE INTO habit_log(habit_id, day) VALUES(?, ?)", arrayOf<Any>(id, today))
+        }
+        return !done
+    }
+
+    /** (selesai, total) untuk hari ini. */
+    fun habitProgress(): Pair<Int, Int> {
+        val list = habits()
+        return list.count { it.doneToday } to list.size
     }
 
     private fun purgeOld() {

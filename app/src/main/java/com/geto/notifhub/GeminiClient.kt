@@ -59,7 +59,7 @@ object GeminiClient {
     fun test(apiKey: String, model: String): String =
         generate(apiKey, model, "Jawab sangat singkat.", "Balas dengan kata: OK", json = false)
 
-    private fun generate(apiKey: String, model: String, system: String, user: String, json: Boolean): String {
+    fun generate(apiKey: String, model: String, system: String, user: String, json: Boolean): String {
         if (apiKey.isBlank()) throw IOException("API key belum diisi")
         val gen = JSONObject().put("temperature", 0.2)
         if (json) gen.put("responseMimeType", "application/json")

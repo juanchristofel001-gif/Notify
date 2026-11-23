@@ -35,6 +35,11 @@
             android:label="Pengaturan"
             android:parentActivityName=".MainActivity" />
 
+        <activity
+            android:name=".HabitActivity"
+            android:exported="false"
+            android:label="Rawat &amp; Rutinitas" />
+
         <service
             android:name=".NotifListener"
             android:exported="false"
