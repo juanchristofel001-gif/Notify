@@ -354,6 +354,16 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "notifhub.db"
         writableDatabase.execSQL("DELETE FROM notifs")
     }
 
+    /** Seperti [resetRuleBased], tapi hanya notifikasi sejak [since] (untuk pemulihan otomatis). */
+    fun resetRuleBasedSince(since: Long): Int {
+        val v = ContentValues().apply {
+            put("priority", Priority.PENDING)
+            put("reason", "")
+            put("source", "")
+        }
+        return writableDatabase.update("notifs", v, "source = 'aturan' AND ts >= ?", arrayOf(since.toString()))
+    }
+
     /** Kembalikan yang tadinya dipilah pakai aturan (karena AI gagal) ke antrean AI. */
     fun resetRuleBased(): Int {
         val v = ContentValues().apply {

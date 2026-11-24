@@ -111,8 +111,58 @@ object GeminiClient {
     fun test(apiKey: String, model: String): String =
         generate(apiKey, model, "Jawab sangat singkat.", "Balas dengan kata: OK", json = false)
 
+    /** Error dari server Gemini, lengkap dengan kode HTTP-nya. */
+    class ApiException(val code: Int, val apiMessage: String) : IOException("HTTP $code: $apiMessage")
+
+    /** Model cadangan (stabil) kalau model pilihan sedang penuh atau tidak tersedia. */
+    private val FALLBACK_MODELS = listOf("gemini-3.1-flash-lite", "gemini-3.8-flash")
+
+    /** Kode yang biasanya sementara: layak dicoba ulang. */
+    private fun transient(code: Int) = code == 429 || code == 500 || code == 502 || code == 503 || code == 504
+
+    /** Pesan singkat & jelas untuk ditampilkan ke pengguna. */
+    fun friendly(e: Throwable): String = when (e) {
+        is ApiException -> when {
+            e.code == 503 || e.code == 502 || e.code == 504 -> "Server Gemini sedang penuh (${e.code})"
+            e.code == 429 -> "Kuota Gemini habis sementara (429)"
+            e.code == 400 && e.apiMessage.contains("API key", true) -> "API key tidak valid"
+            e.code == 403 -> "API key ditolak (403)"
+            e.code == 404 -> "Model tidak ditemukan (404), cek nama model di Pengaturan"
+            else -> "Gemini error ${e.code}: ${e.apiMessage.take(80)}"
+        }
+        is java.net.UnknownHostException, is java.net.SocketTimeoutException, is java.net.ConnectException ->
+            "Tidak ada koneksi internet"
+        else -> e.message?.take(100) ?: e.javaClass.simpleName
+    }
+
+    /**
+     * Panggil Gemini dengan coba ulang otomatis (jeda 2 s lalu 6 s) untuk error sementara,
+     * lalu pindah ke model cadangan kalau model pilihan tetap penuh / tidak ada.
+     */
     fun generate(apiKey: String, model: String, system: String, user: String, json: Boolean): String {
         if (apiKey.isBlank()) throw IOException("API key belum diisi")
+        val models = (listOf(model.trim()) + FALLBACK_MODELS).distinct()
+        var last: Exception? = null
+        for (m in models) {
+            for (attempt in 0..2) {
+                try {
+                    return generateOnce(apiKey, m, system, user, json)
+                } catch (e: ApiException) {
+                    last = e
+                    if (e.code == 400 || e.code == 401 || e.code == 403) throw e      // key salah: percuma diulang
+                    if (e.code == 404) break                                           // model tidak ada → model berikutnya
+                    if (!transient(e.code)) throw e
+                } catch (e: IOException) {
+                    last = e
+                    if (attempt >= 1) break                                            // jaringan: cukup sekali ulang
+                }
+                if (attempt < 2) Thread.sleep(if (attempt == 0) 2_000L else 6_000L)
+            }
+        }
+        throw last ?: IOException("Gemini tidak merespons")
+    }
+
+    private fun generateOnce(apiKey: String, model: String, system: String, user: String, json: Boolean): String {
         val gen = JSONObject().put("temperature", 0.2)
         if (json) gen.put("responseMimeType", "application/json")
         val body = JSONObject()
@@ -138,7 +188,12 @@ object GeminiClient {
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             val resp = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            if (code !in 200..299) throw IOException("HTTP $code: ${resp.take(300)}")
+            if (code !in 200..299) {
+                val msg = try {
+                    JSONObject(resp).optJSONObject("error")?.optString("message")
+                } catch (e: Exception) { null } ?: resp.take(200)
+                throw ApiException(code, msg)
+            }
 
             val candidates = JSONObject(resp).optJSONArray("candidates")
             if (candidates == null || candidates.length() == 0) {

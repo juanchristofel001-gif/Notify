@@ -373,7 +373,7 @@ class MainActivity : AppCompatActivity() {
         return when {
             !hasAccess -> "Nyalakan akses notifikasi dulu ya, biar aku bisa bantu!"
             Classifier.lastError != null && Prefs(this).apiKey.isNotEmpty() ->
-                "Gemini lagi error, sementara aku pakai aturan dulu."
+                "Gemini lagi sibuk, aku pakai aturan dulu ya. Nanti aku pilah ulang!"
             urgent > 0 -> "Ada $urgent yang urgent, cek sekarang ya!"
             penting > 0 -> "$penting pesan penting nunggu dibalas."
             Pet.mood(this) < 15 -> "Aku kangen… rawat aku sebentar dong."
@@ -482,7 +482,7 @@ class MainActivity : AppCompatActivity() {
     private fun updateError() {
         val err = Classifier.lastError
         if (err != null && Prefs(this).apiKey.isNotEmpty()) {
-            errorView.text = "Gemini gagal, sementara dipilah pakai aturan kata kunci.\n${err.take(160)}"
+            errorView.text = "⚠️ $err. Sementara dipilah pakai aturan; otomatis dicoba lagi dan dipilah ulang oleh AI begitu pulih."
             errorView.visibility = View.VISIBLE
         } else {
             errorView.visibility = View.GONE

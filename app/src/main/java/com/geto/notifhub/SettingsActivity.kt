@@ -142,7 +142,7 @@ class SettingsActivity : AppCompatActivity() {
                 val msg = try {
                     "Berhasil. Jawaban model: " + GeminiClient.test(key, m).trim().take(80)
                 } catch (e: Exception) {
-                    "Gagal: ${e.message}"
+                    "Gagal: ${GeminiClient.friendly(e)}"
                 }
                 runOnUiThread { status.text = msg }
             }.start()

@@ -30,6 +30,9 @@ object Classifier {
     var lastError: String? = null
         private set
 
+    private var retryFuture: ScheduledFuture<*>? = null
+    private val alerted = java.util.Collections.synchronizedSet(HashSet<Long>())
+
     @Synchronized
     fun schedule(ctx: Context, delaySec: Long = 4) {
         val app = ctx.applicationContext
@@ -57,10 +60,15 @@ object Classifier {
                     try {
                         val prompt = buildPrompt(prefs, db.recentCorrections(15))
                         val r = GeminiClient.classify(prefs.apiKey, prefs.model, prompt, batch)
-                        lastError = null
+                        if (lastError != null) {
+                            // Gemini pulih: pilah ulang notifikasi 24 jam terakhir yang tadi pakai aturan
+                            lastError = null
+                            db.resetRuleBasedSince(System.currentTimeMillis() - 24L * 3600 * 1000)
+                        }
                         r.associateBy { it.id }
                     } catch (e: Exception) {
-                        lastError = e.message ?: e.javaClass.simpleName
+                        lastError = GeminiClient.friendly(e)
+                        scheduleRetry(ctx)
                         emptyMap()
                     }
                 }
@@ -74,10 +82,29 @@ object Classifier {
                     Triple(p, r, "aturan")
                 }
                 db.setPriority(item.id, priority, reason, source)
-                if (priority == Priority.URGENT && prefs.alertUrgent) alert(ctx, item, reason)
+                // Peringatan hanya untuk notifikasi baru (≤ 30 menit) dan sekali per notifikasi
+                val fresh = System.currentTimeMillis() - item.ts < 30L * 60 * 1000
+                if (priority == Priority.URGENT && prefs.alertUrgent && fresh && alerted.add(item.id)) alert(ctx, item, reason)
             }
             Bus.changed()
         }
+    }
+
+    /** Coba lagi otomatis 5 menit kemudian: pilah ulang yang tadi pakai aturan. */
+    @Synchronized
+    private fun scheduleRetry(ctx: Context) {
+        if (retryFuture?.isDone == false) return
+        val app = ctx.applicationContext
+        retryFuture = exec.schedule(Runnable {
+            try {
+                if (lastError != null) {
+                    Db.get(app).resetRuleBasedSince(System.currentTimeMillis() - 24L * 3600 * 1000)
+                    process(app)
+                }
+            } catch (e: Exception) {
+                Log.w("NotifHub", "Coba ulang gagal", e)
+            }
+        }, 5, TimeUnit.MINUTES)
     }
 
     private fun buildPrompt(prefs: Prefs, corrections: List<NotifItem>): String {
